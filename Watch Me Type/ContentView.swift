@@ -14,6 +14,7 @@ enum DurationUnit: String, CaseIterable, Identifiable {
     }
 }
 
+
 struct ContentView: View {
     @State private var inputText: String = ""
     @State private var targetWPM: Double = 80
@@ -24,6 +25,9 @@ struct ContentView: View {
     @State private var replaceEmDashesWithCommas: Bool = false
     @State private var showStartConfirmation: Bool = false
     @State private var highlightEstimate: Bool = false
+    @State private var useTotalTime: Bool = false
+
+    @FocusState private var isInputFocused: Bool
 
     // Optional total duration
     @State private var desiredDurationValue: String = ""
@@ -34,119 +38,172 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Watch Me Type")
-                    .font(.largeTitle)
-                    .bold()
+                // App header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Watch Me Type")
+                        .font(.title)
+                        .bold()
 
-                Text("Paste or type the text you want typed automatically, set a target WPM or total time, then click Start and switch to your document.")
-                    .font(.subheadline)
+                    HStack(spacing: 4) {
+                        Text("an")
+                        Link("open-source", destination: URL(string: "https://github.com/0xff-r4bbit/watchmetype")!)
+                            .foregroundStyle(.blue)
+                            .underline()
+                        Text("macOS app that mimics human typing")
+                    }
+                    .font(.callout)
                     .foregroundColor(.secondary)
-
-                Text("Text to type:")
-                    .font(.headline)
+                }
 
                 HStack(alignment: .top, spacing: 16) {
-                    TextEditor(text: $inputText)
-                        .frame(minHeight: 220)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.secondary.opacity(0.3))
-                        )
+                    // Left: source text editor in a rounded card, with placeholder
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $inputText)
+                            .focused($isInputFocused)
+                            .padding(8)
+                            .scrollIndicators(.hidden)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Pre-processing")
-                            .font(.subheadline)
-                            .bold()
-
-                        Toggle("Remove blank lines", isOn: $removeBlankLines)
-                        Toggle("Remove emojis", isOn: $removeEmojis)
-                        Toggle("Remove horizontal rules", isOn: $removeHorizontalRules)
-                        Toggle("Remove bullet points (- ...)", isOn: $removeBulletPoints)
-                        Toggle("Replace em-dashes with commas", isOn: $replaceEmDashesWithCommas)
-
-                        Spacer()
-
-                        Button("Process") {
-                            processInputText()
+                        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("Paste the text you'd like to type here.")
+                                .foregroundColor(.secondary)
+                                .padding(.top, 14)
+                                .padding(.leading, 12)
                         }
-                        .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .frame(width: 260, alignment: .topLeading)
-                }
+                    .frame(minHeight: 260)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(NSColor.textBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.secondary.opacity(0.3))
+                    )
 
-                // WPM + labels
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Target WPM: \(Int(targetWPM))")
-                        .font(.subheadline)
+                    // Right: settings column
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Pre-processing card
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("􂺹  Clean-Up")
+                                .font(.headline)
+                                .bold()
 
-                    HStack {
-                        Slider(value: $targetWPM, in: 40...120, step: 10)
-                        Spacer()
-                    }
+                            Toggle("remove blank lines", isOn: $removeBlankLines)
+                            Toggle("remove emojis", isOn: $removeEmojis)
+                            Toggle("remove horizontal rules", isOn: $removeHorizontalRules)
+                            Toggle("remove bullet points (- ...)", isOn: $removeBulletPoints)
+                            Toggle("replace em-dashes with commas", isOn: $replaceEmDashesWithCommas)
 
-                    // Informal “average speed” labels
-                    HStack {
-                        Text("🐌")
-                        Spacer()
-                        Text("🚶‍♂️‍➡️")
-                        Spacer()
-                        Text("🏃‍♂️‍➡️")
-                    }
-                }
+                            Button("Process") {
+                                processInputText()
+                            }
+                            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .padding(.top, 4)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.secondary.opacity(0.08))
+                        )
+                        .layoutPriority(1)
 
-                // Estimated time + optional total duration
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        estimatedTimeText
-                            .font(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
+                        // Typing speed card
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("􀐳 Typing Speed")
+                                .font(.headline)
+                                .bold()
 
-                        Text("Or, you can set a desired typing duration:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            // Target speed slider + labels
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Target Speed: \(Int(targetWPM)) WPM")
+                                    .font(.subheadline)
 
-                        TextField("e.g. 10", text: $desiredDurationValue)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 60)
+                                Slider(value: $targetWPM, in: 40...120, step: 10)
 
-                        Picker("", selection: $durationUnit) {
-                            ForEach(DurationUnit.allCases) { unit in
-                                Text(unit.displayName).tag(unit)
+                                HStack {
+                                    Text("􀓐")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    Text("average")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    Text("􀓎")
+                                        .font(.subheadline)
+                                }
+                            }
+
+                            Toggle("Custom Typing Duration", isOn: $useTotalTime)
+                                .font(.subheadline)
+
+                            // Estimated time or total duration
+                            VStack(alignment: .leading, spacing: 6) {
+                                if useTotalTime {
+                                    HStack(alignment: .center, spacing: 8) {
+                                        Text("type for at least")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                            .padding(.vertical, 4)
+
+                                        TextField("e.g. 10", text: $desiredDurationValue)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 60)
+
+                                        Picker("", selection: $durationUnit) {
+                                            ForEach(DurationUnit.allCases) { unit in
+                                                Text(unit.displayName).tag(unit)
+                                            }
+                                        }
+                                        .pickerStyle(.segmented)
+                                        .frame(maxWidth: .infinity)
+
+                                        if let summary = desiredDurationSummary {
+                                            Text(summary)
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+
+                                        Spacer()
+                                    }
+                                } else {
+                                    estimatedTimeText
+                                        .font(.subheadline)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .padding(.vertical, 4)
+                                }
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 180)
-
-                        if let summary = desiredDurationSummary {
-                            Text(summary)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.secondary.opacity(0.08))
+                )
+                .layoutPriority(1)
 
                         Spacer()
+
+                        HStack {
+                            Spacer()
+                            Button("Start") {
+                                showStartConfirmation = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
                     }
+                    .frame(width: 320, alignment: .topLeading)
+                    .frame(maxHeight: .infinity, alignment: .top)
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
 
-                HStack(spacing: 12) {
-                    Button("Start") {
-                        showStartConfirmation = true
-                    }
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                    Button("Stop") {
-                        typingManager.stopTyping()
-                    }
-
-                    Spacer()
-                }
-
-                Spacer()
             }
             .padding()
             .frame(minWidth: 750, minHeight: 540)
 
             if typingManager.state != .idle || typingManager.lastCompletionDate != nil {
-                Color.black.opacity(0.55)
+                Color.black.opacity(0.75)
                     .ignoresSafeArea()
 
                 VStack(spacing: 12) {
@@ -223,10 +280,10 @@ struct ContentView: View {
                 .padding()
             }
         }
-        .onChange(of: targetWPM) {
+        .onChange(of: targetWPM) { _, _ in
             flashEstimate()
         }
-        .alert("Get ready to start typing", isPresented: $showStartConfirmation) {
+        .alert("Get ready to start typing!", isPresented: $showStartConfirmation) {
             Button("Cancel", role: .cancel) {
                 // Just close the alert and return to the main screen
             }
@@ -241,16 +298,11 @@ struct ContentView: View {
                 )
             }
         } message: {
-            Text("""
-Once you press Confirm, you will have 10 seconds to switch to the window where you want the text to be typed.
-
-After that, the app will begin typing automatically. For best results, avoid touching your keyboard or mouse until it is finished.
-
-You can press Esc at any time to pause typing. When paused, use the Resume button in this window; a short countdown will give you time to switch back to your document before typing continues.
-
-Typing will pause automatically if you change apps. You can click Stop in this window to cancel at any time.
+    Text("""
+After clicking "Confirm", you’ll have 10 seconds to switch to the window where the text will go.
+While typing, if you'd like to pause, press ESC or switch apps.
 """)
-        }
+}
     }
 
     private func flashEstimate() {
@@ -278,13 +330,13 @@ Typing will pause automatically if you change apps. You can click Stop in this w
         case .typing:
             return typingManager.isThinking ? "🤔 Thinking…" : "⌨️ Typing…"
         case .paused:
-            return "Paused"
+            return "⏸ Paused"
         }
     }
 
     private var estimatedTimeText: Text {
         guard let minutes = estimatedMinutes else {
-            return Text("Estimated: at least —.")
+            return Text("Est. at least —.")
                 .foregroundColor(.secondary)
         }
 

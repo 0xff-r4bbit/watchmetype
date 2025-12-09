@@ -332,7 +332,7 @@ final class TypingManager: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.state = .paused
             self.isThinking = false
-            self.progressText = "Paused. Press Resume to continue typing."
+            self.progressText = "Press Resume to continue typing."
         }
     }
 
@@ -497,7 +497,7 @@ final class TypingManager: NSObject, ObservableObject {
     
     private func sendCharacter(_ character: Character) {
         let source = CGEventSource(stateID: .hidSystemState)
-        
+
         // Special-case newlines: send a real Return key event so apps treat it
         // exactly like pressing the Enter/Return key, instead of a raw "\n".
         if character == "\n" || character == "\r" {

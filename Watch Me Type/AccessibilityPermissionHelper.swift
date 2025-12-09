@@ -9,7 +9,7 @@ import Foundation
 import ApplicationServices
 
 enum AccessibilityPermissionHelper {
-    /// Returns true if the app is already trusted for Accessibility.
+    /// Returns true if the app is alreasdy trusted for Accessibility.
     static var isTrusted: Bool {
         AXIsProcessTrusted()
     }
