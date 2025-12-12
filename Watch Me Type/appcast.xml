@@ -1,0 +1,43 @@
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+
+  <channel>
+    <title>Watch Me Type Updates</title>
+    <link>https://0xff-r4bbit.github.io/watchmetype/</link>
+    <description>Update feed for Watch Me Type</description>
+    <language>en</language>
+
+    <!--
+      This is a placeholder item for your first release.
+      Once you package and sign your first .zip build, update:
+        - version
+        - shortVersionString
+        - enclosure URL
+        - edSignature
+        - length
+        - pubDate
+        - release notes link
+    -->
+
+    <item>
+      <title>Version 1.0.0</title>
+      <sparkle:releaseNotesLink>
+        https://0xff-r4bbit.github.io/watchmetype/release-notes-1.0.0.html
+      </sparkle:releaseNotesLink>
+      <pubDate>Wed, 10 Dec 2025 12:00:00 +0000</pubDate>
+
+      <enclosure
+        url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v1.0.0/WatchMeType-1.0.0.zip"
+        sparkle:version="1"
+        sparkle:shortVersionString="1.0.0"
+        sparkle:edSignature="PLACEHOLDER_SIGNATURE"
+        length="0"
+        type="application/octet-stream" />
+    </item>
+
+  </channel>
+</rss>

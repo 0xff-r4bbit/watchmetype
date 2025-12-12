@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 enum DurationUnit: String, CaseIterable, Identifiable {
     case minutes
@@ -8,8 +9,8 @@ enum DurationUnit: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .minutes: return "Minutes"
-        case .hours: return "Hours"
+        case .minutes: return "minutes"
+        case .hours: return "hours"
         }
     }
 }
@@ -26,6 +27,10 @@ struct ContentView: View {
     @State private var showStartConfirmation: Bool = false
     @State private var highlightEstimate: Bool = false
     @State private var useTotalTime: Bool = false
+    @State private var hasShownAccessibilityAlert: Bool = false
+    @State private var storedNormalWindowFrame: CGRect? = nil
+    @State private var isAdjustingWindowFrame: Bool = false
+    private let compactOverlayWidth: CGFloat = 430
 
     @FocusState private var isInputFocused: Bool
 
@@ -35,24 +40,35 @@ struct ContentView: View {
 
     @StateObject private var typingManager = TypingManager()
 
+    private var isOverlayVisible: Bool {
+        typingManager.state != .idle || typingManager.lastCompletionDate != nil
+    }
+
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 16) {
-                // App header
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Watch Me Type")
-                        .font(.title)
-                        .bold()
+                // App header + support button
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Watch Me Type")
+                            .font(.title)
+                            .bold()
 
-                    HStack(spacing: 4) {
-                        Text("an")
-                        Link("open-source", destination: URL(string: "https://github.com/0xff-r4bbit/watchmetype")!)
-                            .foregroundStyle(.blue)
-                            .underline()
-                        Text("macOS app that mimics human typing")
+                        HStack(spacing: 4) {
+                            Text("an")
+                            Link("open-source", destination: URL(string: "https://github.com/0xff-r4bbit/watchmetype")!)
+                                .foregroundStyle(.blue)
+                                .underline()
+                                .hoverPointer()
+                            Text("macOS app that mimics human typing")
+                        }
+                        .font(.callout)
+                        .foregroundColor(.secondary)
                     }
-                    .font(.callout)
-                    .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    KoFiSupportButton()
                 }
 
                 HStack(alignment: .top, spacing: 16) {
@@ -157,14 +173,6 @@ struct ContentView: View {
                                         }
                                         .pickerStyle(.segmented)
                                         .frame(maxWidth: .infinity)
-
-                                        if let summary = desiredDurationSummary {
-                                            Text(summary)
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        }
-
-                                        Spacer()
                                     }
                                 } else {
                                     estimatedTimeText
@@ -200,16 +208,24 @@ struct ContentView: View {
 
             }
             .padding()
-            .frame(minWidth: 750, minHeight: 540)
+            .frame(minWidth: isOverlayVisible ? compactOverlayWidth : 750, minHeight: 540)
+            .allowsHitTesting(!isOverlayVisible)
 
-            if typingManager.state != .idle || typingManager.lastCompletionDate != nil {
-                Color.black.opacity(0.75)
+            if isOverlayVisible {
+                BlurOverlay()
                     .ignoresSafeArea()
+                    .overlay(
+                        Color.black.opacity(0.7)
+                            .ignoresSafeArea()
+                    )
+                    // Capture pointer events across the whole window so underlying onHover doesn’t fire.
+                    .contentShape(Rectangle())
+                    .onTapGesture { }
 
                 VStack(spacing: 12) {
                     if typingManager.state == .idle, typingManager.lastCompletionDate != nil {
                         Text("🎉 Done! 🎉")
-                            .font(.title2)
+                            .font(.title)
                             .bold()
                             .foregroundColor(.white)
 
@@ -221,15 +237,102 @@ struct ContentView: View {
                                 .padding(.horizontal)
                         }
 
+                        // Social follow CTA + icons
+                        VStack(spacing: 16) {
+                            Text("If this helped you, please consider following me for future updates.")
+                                .font(.body)
+                                .foregroundColor(.white.opacity(0.9))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+
+                            HStack(spacing: 16) {
+                                Button {
+                                    if let url = URL(string: "https://ko-fi.com/0xffr4bbit") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_ko-fi")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .hoverPointer()
+
+                                Button {
+                                    if let url = URL(string: "https://x.com/0xff_r4bbit") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_x")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .hoverPointer()
+
+                                Button {
+                                    if let url = URL(string: "https://www.reddit.com/user/0xff-r4bbit/") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_reddit")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 32, height: 32)
+                                }
+                                .hoverPointer()
+
+                                Button {
+                                    if let url = URL(string: "https://www.instagram.com/0xff.r4bbit/") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_instagram")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .hoverPointer()
+
+                                Button {
+                                    if let url = URL(string: "https://bsky.app/profile/0xff-r4bbit.bsky.social") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_bluesky")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .hoverPointer()
+
+                                Button {
+                                    if let url = URL(string: "https://mastodon.social/@0xff_r4bbit") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_mastodon")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .hoverPointer()
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.top, 10)
+
                         Button("Let's go again.") {
                             typingManager.stopTyping()
                             inputText = ""
                             desiredDurationValue = ""
+                            restoreNormalWindowFrame()
                         }
+                        .padding(.top, 14)
                         .buttonStyle(.borderedProminent)
                     } else {
                         Text(statusText)
-                            .font(.title2)
+                            .font(.title)
                             .bold()
                             .foregroundColor(.white)
 
@@ -280,8 +383,21 @@ struct ContentView: View {
                 .padding()
             }
         }
+        .onAppear {
+            handleAccessibilityOnAppear()
+        }
         .onChange(of: targetWPM) { _, _ in
             flashEstimate()
+        }
+        .onChange(of: isOverlayVisible) { _, newValue in
+            DispatchQueue.main.async {
+                setWindowAlwaysOnTop(newValue)
+                if newValue {
+                    compactWindowForOverlay()
+                } else {
+                    restoreNormalWindowFrame()
+                }
+            }
         }
         .alert("Get ready to start typing!", isPresented: $showStartConfirmation) {
             Button("Cancel", role: .cancel) {
@@ -299,8 +415,8 @@ struct ContentView: View {
             }
         } message: {
     Text("""
-After clicking "Confirm", you’ll have 10 seconds to switch to the window where the text will go.
-While typing, if you'd like to pause, press ESC or switch apps.
+You’ll have 10 seconds to switch to the window where the text will go. 
+To pause, press ESC or switch apps.
 """)
 }
     }
@@ -328,9 +444,9 @@ While typing, if you'd like to pause, press ESC or switch apps.
                 return "Preparing to start…"
             }
         case .typing:
-            return typingManager.isThinking ? "🤔 Thinking…" : "⌨️ Typing…"
+            return typingManager.isThinking ? "🤔 Thinking 🤔" : "⌨️ Typing ⌨️"
         case .paused:
-            return "⏸ Paused"
+            return "⏸ Paused ⏸"
         }
     }
 
@@ -502,10 +618,232 @@ While typing, if you'd like to pause, press ESC or switch apps.
 
         inputText = text
     }
+
+    private func handleAccessibilityOnAppear() {
+        // Only run this once per launch so we don't nag if the view reloads.
+        guard !hasShownAccessibilityAlert else { return }
+        hasShownAccessibilityAlert = true
+
+        // Move the window out of the way as soon as it actually exists on screen.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Store the normal frame once (used to restore after the overlay compacts the window).
+            storeNormalWindowFrameIfNeeded()
+
+            moveWindowToRightEdge()
+
+            // If we're not yet trusted, show our explanation alert.
+            if !AccessibilityPermissionHelper.isTrusted {
+                showAccessibilityPreflightAlert()
+            }
+        }
+    }
+
+    private func moveWindowToRightEdge() {
+        guard
+            let screen = NSScreen.main,
+            let window = NSApp.mainWindow ?? NSApp.windows.first
+        else {
+            return
+        }
+
+        storeNormalWindowFrameIfNeeded()
+        let screenFrame = screen.visibleFrame
+        var windowFrame = window.frame
+
+        // Position the window near the right edge, centred vertically.
+        windowFrame.origin.x = screenFrame.maxX - windowFrame.size.width - 20
+        windowFrame.origin.y = screenFrame.midY - windowFrame.size.height / 2
+
+        window.setFrame(windowFrame, display: true, animate: true)
+    }
+
+    private func setWindowAlwaysOnTop(_ enabled: Bool) {
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        window.level = enabled ? .statusBar : .normal
+    }
+
+    private func storeNormalWindowFrameIfNeeded() {
+        guard storedNormalWindowFrame == nil else { return }
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        storedNormalWindowFrame = window.frame
+    }
+
+    private func compactWindowForOverlay() {
+        storeNormalWindowFrameIfNeeded()
+
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+        var newFrame = window.frame
+        newFrame.size.width = compactOverlayWidth
+
+        // Keep the right edge aligned to the screen’s right edge (with a small margin).
+        newFrame.origin.x = screenFrame.maxX - newFrame.size.width - 20
+
+        // Keep the window vertically centred (same approach as `moveWindowToRightEdge`).
+        newFrame.origin.y = screenFrame.midY - newFrame.size.height / 2
+
+        // Defer window frame changes to avoid triggering AppKit layout recursion during SwiftUI updates.
+        DispatchQueue.main.async {
+            window.setFrame(newFrame, display: true, animate: false)
+
+            // Correction pass: ensure alignment after SwiftUI may enforce a larger min width.
+            DispatchQueue.main.async {
+                guard !isAdjustingWindowFrame else { return }
+                isAdjustingWindowFrame = true
+                defer { isAdjustingWindowFrame = false }
+
+                guard let screenFrame2 = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+                let current = window.frame
+                let targetX = screenFrame2.maxX - current.size.width - 20
+                let targetY = screenFrame2.midY - current.size.height / 2
+
+                // If we're already effectively aligned, don't force another layout pass.
+                if abs(current.origin.x - targetX) < 1 && abs(current.origin.y - targetY) < 1 {
+                    return
+                }
+
+                var corrected = current
+                corrected.origin.x = targetX
+                corrected.origin.y = targetY
+                window.setFrame(corrected, display: true, animate: false)
+            }
+        }
+    }
+
+    private func restoreNormalWindowFrame() {
+        guard let normal = storedNormalWindowFrame else { return }
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else {
+            // Defer window frame changes to avoid triggering AppKit layout recursion during SwiftUI updates.
+            DispatchQueue.main.async {
+                window.setFrame(normal, display: true, animate: false)
+            }
+            return
+        }
+
+        var restored = normal
+        // Re-align to the right edge of the *current* display in case the window moved screens.
+        restored.origin.x = screenFrame.maxX - restored.size.width - 20
+        restored.origin.y = screenFrame.midY - restored.size.height / 2
+
+        // Defer window frame changes to avoid triggering AppKit layout recursion during SwiftUI updates.
+        DispatchQueue.main.async {
+            window.setFrame(restored, display: true, animate: false)
+
+            // Correction pass: ensure alignment after SwiftUI may enforce a larger min width.
+            DispatchQueue.main.async {
+                guard !isAdjustingWindowFrame else { return }
+                isAdjustingWindowFrame = true
+                defer { isAdjustingWindowFrame = false }
+
+                guard let screenFrame2 = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+                let current = window.frame
+                let targetX = screenFrame2.maxX - current.size.width - 20
+                let targetY = screenFrame2.midY - current.size.height / 2
+
+                // If we're already effectively aligned, don't force another layout pass.
+                if abs(current.origin.x - targetX) < 1 && abs(current.origin.y - targetY) < 1 {
+                    return
+                }
+
+                var corrected = current
+                corrected.origin.x = targetX
+                corrected.origin.y = targetY
+                window.setFrame(corrected, display: true, animate: false)
+            }
+        }
+    }
+
+    private func showAccessibilityPreflightAlert() {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Allow Accessibility access"
+            alert.informativeText =
+            """
+            Please grant me Accessibility access so I can type for you.
+            """
+            alert.addButton(withTitle: "Continue")
+            alert.addButton(withTitle: "Quit")
+
+            let response = alert.runModal()
+            switch response {
+            case .alertFirstButtonReturn:
+                // Push our window behind others so the system Accessibility prompt
+                // and System Settings are not obscured.
+                if let window = NSApp.mainWindow ?? NSApp.windows.first {
+                    window.orderBack(nil)
+                }
+                AccessibilityPermissionHelper.requestIfNeeded()
+            default:
+                NSApp.terminate(nil)
+            }
+        }
+    }
 }
 
 #Preview {
     ContentView()
+}
+
+struct BlurOverlay: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .withinWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        // Nothing to update dynamically for now.
+    }
+}
+
+struct KoFiSupportButton: View {
+    var body: some View {
+        Button {
+            if let url = URL(string: "https://ko-fi.com/0xffr4bbit") {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image("KoFiIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+
+                Text("Support this app.")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.accentColor)
+            )
+            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1.5)
+        }
+        .buttonStyle(.plain)
+        .help("open Ko-fi to support development")
+        .hoverPointer()
+    }
+}
+
+private extension View {
+    func hoverPointer() -> some View {
+        self.onHover { inside in
+            if inside {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
 }
 
 private extension Character {
