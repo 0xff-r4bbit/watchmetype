@@ -390,11 +390,23 @@ struct ContentView: View {
             flashEstimate()
         }
         .onChange(of: isOverlayVisible) { _, newValue in
+            // When the overlay disappears entirely, ensure we return to a normal window.
+            if !newValue {
+                DispatchQueue.main.async {
+                    setWindowAlwaysOnTop(false)
+                    restoreNormalWindowFrame()
+                }
+            }
+        }
+        .onChange(of: typingManager.state) { _, newState in
             DispatchQueue.main.async {
-                setWindowAlwaysOnTop(newValue)
-                if newValue {
+                let isRunActive = newState != .idle
+                setWindowAlwaysOnTop(isRunActive)
+
+                if isRunActive {
                     compactWindowForOverlay()
                 } else {
+                    // Typing finished (Done overlay may still be visible): return to normal size + window level.
                     restoreNormalWindowFrame()
                 }
             }

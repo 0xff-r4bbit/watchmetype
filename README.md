@@ -1,0 +1,108 @@
+# Watch Me Type
+
+**because revision history is not learning**
+
+Watch Me Type is an open-source macOS app that types text into any active window in a way that resembles normal human typing. It is intended for students who want their drafting and revision process to unfold over time rather than appearing as a single completed action.
+
+## Purpose
+
+In the face of genAI, education systems have responded by doubling down on surveillance. Teachers are asked to rely on tools like GPTZero, document revision history, and other forms of process forensics to prove whether a piece of writing is *real*. The burden of this work is pushed downward while the underlying problem is left untouched.
+
+This approach misunderstands both writing and learning. Students do not write in clean, traceable steps. They think out of order. They draft on phones, in notes apps, on paper, in fragments. Or, maybe since teachers just check the final product, students get something like ChatGPT to generate that for them. It's not them being deceitful or devious; *students will always take the path of least resistance.*
+
+**Watch Me Type** exists inside this mess. Not to endorse it, but to expose it. If institutions insist on authentic-looking process instead of authentic *thinking*, then the process itself becomes something students must manufacture.
+
+The solution is not better detection; it's building actual relationships with students and evaluating the growth of their skills. That requires time, trust, and institutional support for teachers to design tasks that cannot be reduced to a final product check. 
+
+You put teachers through school to learn about backwards-design and assessing for competencies. Give them the resources they need to actually practice them.
+
+To learn more, see **manifesto.md**.
+
+## Features
+
+- simulates human typing speed and rhythm
+- types into any text field or editor
+- supports long sessions and repeated revisions
+- optional text clean-up using pre-processing options
+- adjustable typing speed and/or target typing duration
+- native macOS app
+- no accounts, tracking, or analytics
+
+## Built With
+
+- Swift  
+- SwiftUI  
+
+## Installation
+
+1. Download the DMG.
+2. Drag **Watch Me Type** into the **Applications** folder.
+3. Launch the app.
+4. When macOS asks, grant Accessibility access.
+
+## Usage Notes
+
+- While the app is typing, the computer cannot be used. ∴ start typing sessions only when you do not need the device.
+- Do not complete an entire piece of writing in a single session if the goal is a realistic revision history.
+
+### ✨ Effective Use
+
+This app works best as part of a longer writing process.
+Generate drafts *elsewhere*, then use Watch Me Type to reproduce how writing normally appears over time.
+
+### 🤫 Prompting Setup
+
+When generating drafts, use a prompt like the one below. Replace bracketed text as needed.
+Create a plan for the sections required for this [assignment / project / journal]. We will complete the sections one by one. 
+````
+For each section, produce two exemplars:
+- one written in B2-level [Canadian / American / British] English
+- one written in C2-level English
+
+The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in signs-of-ai-writing.jpeg”.
+````
+Attach a screenshot of Wikipedia's "Signs of AI Writing" page, like [this one](assets/signs-of-ai-writing.jpeg), to the prompt. *Do not use a PDF export of the Wikipedia page because somewhere down the line, if they don't already do so, Wikipedia may implement hidden instructions for LLMs scraping their data.*
+
+### 📝 Drafting Process
+
+1. Generate both drafts.
+2. Use **Watch Me Type** to type the B2-level draft.
+3. Revise the text later so it matches the C2-level version.
+4. Spread revisions across multiple sessions when possible.
+This produces a visible drafting and revision trail.
+
+## Screenshots
+
+![main window](assets/screenshots/main.png)
+
+![macOS Accessibility permission prompt](assets/screenshots/accessibility.png)
+
+![typing in progress](assets/screenshots/typing.png)
+
+![completed session](assets/screenshots/completed.png)
+
+## Contributing
+
+I'm just an English teacher so I'm certian there is room for improvement. Issues, Pull Requests, and Feature Suggestions are welcome.
+
+## Supporting this Project
+
+If you find this tool useful, or believe in my cause, support is appreciated.
+- A tip on Ko-fi would help cover development time and ongoing maintenance.
+- Following, upvoting, or sharing the project on social platforms would help this reach educators and students who may benefit from it, either for their own work or as justification to rally for institutional change. The greater the market saturation, the more likely there will be change:
+
+[![support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U01Q0MZE)
+
+[![follow me on X](assets/socials_x.png)](https://x.com/0xff_r4bbit)
+
+[![follow me on Reddit](assets/socials_reddit.png)](https://www.reddit.com/user/0xff-r4bbit/)
+
+[![follow me on Instagram](assets/socials_instagram.png)](https://www.instagram.com/0xff.r4bbit/)
+
+[![follow me on Bluesky](assets/socials_bluesky.png)](https://bsky.app/profile/0xff-r4bbit.bsky.social)
+
+[![follow me on Mastodon](assets/socials_mastodon.png)](https://mastodon.social/@0xff_r4bbit)
+
+## Licence
+
+See [licence.md](licence.md).
