@@ -259,6 +259,18 @@ struct ContentView: View {
                                 .hoverPointer()
 
                                 Button {
+                                    if let url = URL(string: "https://buymeacoffee.com/0xff.r4bbit") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    Image("socials_buymeacoffee")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .hoverPointer()
+
+                                Button {
                                     if let url = URL(string: "https://x.com/0xff_r4bbit") {
                                         NSWorkspace.shared.open(url)
                                     }
@@ -816,45 +828,99 @@ struct BlurOverlay: NSViewRepresentable {
 
 struct KoFiSupportButton: View {
     var body: some View {
-        Button {
-            if let url = URL(string: "https://ko-fi.com/0xffr4bbit") {
-                NSWorkspace.shared.open(url)
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image("KoFiIcon")
+        HStack(spacing: 8) {
+            Text("Please support this app.")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+
+            // Ko-fi button
+            Button {
+                if let url = URL(string: "https://ko-fi.com/0xffr4bbit") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Image("tip_ko-fi")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 20, height: 20)
-
-                Text("Support this app.")
-                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 16, height: 16)
+                    .padding(8)
+                    .background(Color(hex: "#FF6433"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(minHeight: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.accentColor)
-            )
-            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1.5)
+            .buttonStyle(.plain)
+            .help("open Ko-fi")
+            .hoverPointer()
+
+            // Buy Me a Coffee button
+            Button {
+                if let url = URL(string: "https://buymeacoffee.com/0xff.r4bbit") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Image("tip_buymeacoffee")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                    .padding(8)
+                    .background(Color(hex: "#FFDD03"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help("open Buy Me a Coffee")
+            .hoverPointer()
         }
-        .buttonStyle(.plain)
-        .help("open Ko-fi to support development")
-        .hoverPointer()
+        .padding(.horizontal, 0)
+        .padding(.vertical, 0)
+    }
+}
+
+
+private struct HoverPointerModifier: ViewModifier {
+    @State private var isInside = false
+
+    func body(content: Content) -> some View {
+        content.onHover { inside in
+            // Prevent mismatched push/pop when views appear/disappear under an overlay.
+            if inside {
+                guard !isInside else { return }
+                isInside = true
+                NSCursor.pointingHand.push()
+            } else {
+                guard isInside else { return }
+                isInside = false
+                NSCursor.pop()
+            }
+        }
     }
 }
 
 private extension View {
     func hoverPointer() -> some View {
-        self.onHover { inside in
-            if inside {
-                NSCursor.pointingHand.push()
-            } else {
-                NSCursor.pop()
-            }
+        self.modifier(HoverPointerModifier())
+    }
+}
+
+private extension Color {
+    init(hex: String) {
+        var hex = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+
+        var value: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&value)
+
+        let r, g, b: Double
+        switch hex.count {
+        case 6:
+            r = Double((value & 0xFF0000) >> 16) / 255.0
+            g = Double((value & 0x00FF00) >> 8) / 255.0
+            b = Double(value & 0x0000FF) / 255.0
+        default:
+            r = 0
+            g = 0
+            b = 0
         }
+
+        self = Color(red: r, green: g, blue: b)
     }
 }
 
