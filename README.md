@@ -51,8 +51,9 @@ Generate drafts *elsewhere*, then use Watch Me Type to reproduce how writing nor
 ### 🤫 Prompting Setup
 
 When generating drafts, use a prompt like the one below. Replace bracketed text as needed.
-Create a plan for the sections required for this [assignment / project / journal]. We will complete the sections one by one. 
 ````
+Create a plan for the sections required for this [assignment / project / journal]. We will complete the sections one by one. 
+
 For each section, produce two exemplars:
 - one written in B2-level [Canadian / American / British] English
 - one written in C2-level English
