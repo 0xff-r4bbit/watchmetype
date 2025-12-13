@@ -106,7 +106,7 @@ If you find this tool useful or believe in my cause, I would really appreciate y
 
 <p align="center">
     <a href="https://ko-fi.com/U7U01Q0MZE"><img src="assets/socials_ko-fi.png" alt="support me on Ko-fi"></a>&emsp;
-    <a href="https://buymeacoffee.com/0xff.r4bbit"><img src="assets/socials_buy-me-a-coffee.png" alt="buy me a coffee"></a>
+    <a href="https://buymeacoffee.com/0xff.r4bbit"><img src="assets/socials_buymeacoffee.png" alt="buy me a coffee"></a>
 </p>
 
 - Following, upvoting, or sharing the project on social platforms would help this reach educators and students who may benefit from it, either for their own work or as justification to rally for institutional change:
