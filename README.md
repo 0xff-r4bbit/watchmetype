@@ -17,7 +17,7 @@ This approach misunderstands both writing and learning. Students do not write in
 The solution is not better detection; it's building actual relationships with students and evaluating the growth of their skills. That requires time, trust, and institutional support for teachers to design tasks that cannot be reduced to a final product check. 
 
 **To students:**
->I'm handing you a calculator that makes it much easier to cheat on your math test, but it doesn't mean you don't need math in your life. *Apply yourself.*
+>A calculator makes it much easier to cheat on your math test, but it doesn't mean you don't need math in your life. *Apply yourself.*
 
 **To my fellow teachers:**
 >Until institutions and governing bodies provide the necessary resources for you to adapt to this new age of AI, I am sorry for the chaos this will create in your classrooms.
