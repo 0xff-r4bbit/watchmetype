@@ -6,6 +6,8 @@ Watch Me Type is an open-source macOS app that types text into any active window
 
 ## Purpose
 
+>TL;DR: to force those in charge in education to empower teachers with the resources to adapt to the ubiquity of AI
+
 In the face of genAI, education systems have responded by doubling down on surveillance. Teachers are asked to rely on tools like GPTZero, document revision history, and other forms of process forensics to prove whether a piece of writing is *real*. The burden of this work is pushed downward while the underlying problem is left untouched.
 
 This approach misunderstands both writing and learning. Students do not write in clean, traceable steps. They think out of order. They draft on phones, in notes apps, on paper, in fragments. Or, maybe since teachers just check the final product, students get something like ChatGPT to generate that for them. It's not them being deceitful or devious; *students will always take the path of least resistance.*
