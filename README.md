@@ -94,10 +94,11 @@ I'm just an English teacher so I'm certian there is room for improvement. Issues
 ## Supporting this Project
 
 If you find this tool useful, or believe in my cause, support is appreciated.
-- A tip on Ko-fi would help cover development time and ongoing maintenance.
+- A tip on **Ko-fi** or **Buy Me a Coffee** would help cover development time and ongoing maintenance.
 
 <p align="center">
     <a href="https://ko-fi.com/U7U01Q0MZE"><img src="assets/socials_ko-fi.png" alt="support me on Ko-fi"></a>
+    <a href="https://buymeacoffee.com/0xff.r4bbit"><img src="assets/socials_buy-me-a-coffee.png" alt="buy me a coffee"></a>
 </p>
 
 - Following, upvoting, or sharing the project on social platforms would help this reach educators and students who may benefit from it, either for their own work or as justification to rally for institutional change:
@@ -111,5 +112,10 @@ If you find this tool useful, or believe in my cause, support is appreciated.
 </p>
 
 ## Licence
+This project is released under a source-available licence.
 
-See [licence.md](licence.md).
+You are free to view, use, and modify the source code for personal and educational purposes. Commercial use, redistribution, hosting, or selling this software — including modified versions — is not permitted without explicit permission from the author.
+
+The source is shared to support transparency, learning, and community discussion, not to enable resale or unauthorised distribution.
+
+For details, see [licence.md](licence.md).
