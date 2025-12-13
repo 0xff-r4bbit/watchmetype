@@ -68,6 +68,7 @@ Attach a screenshot of Wikipedia's "Signs of AI Writing" page, like [this one](a
 2. Use **Watch Me Type** to type the B2-level draft.
 3. Revise the text later so it matches the C2-level version.
 4. Spread revisions across multiple sessions when possible.
+
 This produces a visible drafting and revision trail.
 
 ## Screenshots
@@ -90,7 +91,7 @@ This produces a visible drafting and revision trail.
 
 ## Contributing
 
-I'm just an English teacher so I'm certian there is room for improvement. Issues, pull requests, and feature suggestions are welcome.
+I'm just an English teacher so I'm certain there is room for improvement. Issues, pull requests, and feature suggestions are welcome.
 
 ## Supporting this Project
 
