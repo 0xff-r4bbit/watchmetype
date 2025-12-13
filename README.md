@@ -16,11 +16,14 @@ This approach misunderstands both writing and learning. Students do not write in
 
 The solution is not better detection; it's building actual relationships with students and evaluating the growth of their skills. That requires time, trust, and institutional support for teachers to design tasks that cannot be reduced to a final product check. 
 
+**To students:**
+>I am giving you a calculator that makes it much easier to cheat on your math test, but it doesn't mean you don't need math in your life. *Apply yourself.*
+
 **To my fellow teachers:**
->Until institutions and governing bodies provide the necessary resources for you to adapt to this new age of AI, I do apologize for the chaos this will create in your classrooms.
+>Until institutions and governing bodies provide the necessary resources for you to adapt to this new age of AI, I am sorry for the chaos this will create in your classrooms.
 
 **To those in charge in education:**
->You put teachers through school to learn about backwards design and competency-based assessments, but without time, staffing, and institutional support, especially with the students learning about AI faster than you can even figure out what they are, teachers have to resort to policing student work just to make sure the students *might* be learning. Please give them the resources they need to actually do their job well and, maybe, you just might prevent their burnout.
+>You put teachers through school to learn about backwards design and competency-based assessments, but without time, staffing, and institutional support, teachers have to resort to policing student work just to make sure the students *might* be learning. *Please* give teachers the resources they need to actually do their job well and, maybe, you just might prevent their burnout.
 
 ## Features
 
@@ -48,34 +51,6 @@ The solution is not better detection; it's building actual relationships with st
 
 - While the app is typing, the computer cannot be used. ∴ start typing sessions only when you do not need the device.
 - Do not complete an entire piece of writing in a single session if the goal is a realistic revision history.
-
-### ✨ Effective Use
-
-This app works best as part of a longer writing process.
-Generate drafts *elsewhere*, then use Watch Me Type to reproduce how writing normally appears over time.
-
-### 🤫 Prompting Setup
-
-When generating drafts, use a prompt like the one below. Replace bracketed text as needed.
-````
-Create a plan for the sections required for this [assignment / project / journal]. We will complete the sections one by one. 
-
-For each section, produce two exemplars:
-- one written in B2-level [Canadian / American / British] English
-- one written in C2-level English
-
-The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in "signs"-of-ai-writing.jpeg”.
-````
-Attach a screenshot of Wikipedia's "Signs of AI Writing" page, like [this one](assets/signs-of-ai-writing.jpeg), to the prompt. *Do not use a PDF export of the Wikipedia page because somewhere down the line, if they don't already do so, Wikipedia may implement hidden instructions for LLMs scraping their data.*
-
-### 📝 Drafting Process
-
-1. Generate both drafts.
-2. Use **Watch Me Type** to type the B2-level draft.
-3. Revise the text later so it matches the C2-level version.
-4. Spread revisions across multiple sessions when possible.
-
-This produces a visible drafting and revision trail.
 
 ## Screenshots
 <p align="center">
