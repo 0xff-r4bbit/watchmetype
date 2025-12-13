@@ -99,7 +99,7 @@ If you find this tool useful, or believe in my cause, support is appreciated.
 - A tip on **Ko-fi** or **Buy Me a Coffee** would help cover development time and ongoing maintenance.
 
 <p align="center">
-    <a href="https://ko-fi.com/U7U01Q0MZE"><img src="assets/socials_ko-fi.png" alt="support me on Ko-fi"></a>
+    <a href="https://ko-fi.com/U7U01Q0MZE"><img src="assets/socials_ko-fi.png" alt="support me on Ko-fi"></a>&emsp;
     <a href="https://buymeacoffee.com/0xff.r4bbit"><img src="assets/socials_buy-me-a-coffee.png" alt="buy me a coffee"></a>
 </p>
 
