@@ -72,14 +72,30 @@ Attach a screenshot of Wikipedia's "Signs of AI Writing" page, like [this one](a
 This produces a visible drafting and revision trail.
 
 ## Screenshots
-
-![main window](assets/screenshots/main.png)
-
-![macOS Accessibility permission prompt](assets/screenshots/accessibility.png)
-
-![typing in progress](assets/screenshots/typing.png)
-
-![completed session](assets/screenshots/completed.png)
+<p align="center">
+    <em>main app window</em>
+</p>
+<p align="center">
+  <img src="assets/screenshots/main.png" alt="main window">
+</p>
+<p align="center">
+    <em>macOS Accessibility permission prompt</em>
+</p>
+<p align="center">
+  <img src="assets/screenshots/accessibility.png" alt="macOS Accessibility permission prompt">
+</p>
+<p align="center">
+    <em>typing in progress</em>
+</p>
+<p align="center">
+  <img src="assets/screenshots/typing.png" alt="typing in progress">
+</p>
+<p align="center">
+    <em>completed session</em>
+</p>
+<p align="center">
+  <img src="assets/screenshots/completed.png" alt="completed session">
+</p>
 
 ## Contributing
 
@@ -91,17 +107,7 @@ If you find this tool useful, or believe in my cause, support is appreciated.
 - A tip on Ko-fi would help cover development time and ongoing maintenance.
 - Following, upvoting, or sharing the project on social platforms would help this reach educators and students who may benefit from it, either for their own work or as justification to rally for institutional change. The greater the market saturation, the more likely there will be change:
 
-[![support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U01Q0MZE)
-
-[![follow me on X](assets/socials_x.png)](https://x.com/0xff_r4bbit)
-
-[![follow me on Reddit](assets/socials_reddit.png)](https://www.reddit.com/user/0xff-r4bbit/)
-
-[![follow me on Instagram](assets/socials_instagram.png)](https://www.instagram.com/0xff.r4bbit/)
-
-[![follow me on Bluesky](assets/socials_bluesky.png)](https://bsky.app/profile/0xff-r4bbit.bsky.social)
-
-[![follow me on Mastodon](assets/socials_mastodon.png)](https://mastodon.social/@0xff_r4bbit)
+|[![support me on Ko-fi](assets/socials_ko-fi.png)](https://ko-fi.com/U7U01Q0MZE)|[![follow me on X](assets/socials_x.png)](https://x.com/0xff_r4bbit)|[![upvote my release posts on Reddit](assets/socials_reddit.png)](https://www.reddit.com/user/0xff-r4bbit/)|[![follow me on Instagram](assets/socials_instagram.png)](https://www.instagram.com/0xff.r4bbit/)|[![follow me on Bluesky](assets/socials_bluesky.png)](https://bsky.app/profile/0xff-r4bbit.bsky.social)|[![follow me on Mastodon](assets/socials_mastodon.png)](https://mastodon.social/@0xff_r4bbit)
 
 ## Licence
 
