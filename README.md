@@ -83,23 +83,24 @@ This produces a visible drafting and revision trail.
     <em>typing in progress</em>
 </p><br>
 <p align="center">
-</p><br>
-<p align="center">
     <img src="assets/screenshots/completed.png" alt="completed session"><br>
     <em>completed session</em>
 </p>
 
 ## Contributing
 
-I'm just an English teacher so I'm certian there is room for improvement. Issues, Pull Requests, and Feature Suggestions are welcome.
+I'm just an English teacher so I'm certian there is room for improvement. Issues, pull requests, and feature suggestions are welcome.
 
 ## Supporting this Project
 
 If you find this tool useful, or believe in my cause, support is appreciated.
 - A tip on Ko-fi would help cover development time and ongoing maintenance.
+
+<p align="center">
+    <a href="https://ko-fi.com/U7U01Q0MZE"><img src="assets/socials_ko-fi.png" alt="support me on Ko-fi"></a>
+</p>
 - Following, upvoting, or sharing the project on social platforms would help this reach educators and students who may benefit from it, either for their own work or as justification to rally for institutional change:
 <p align="center">
-    <a href="https://ko-fi.com/U7U01Q0MZE"><img src="assets/socials_ko-fi.png" alt="support me on Ko-fi"></a>&emsp;
     <a href="https://x.com/0xff_r4bbit"><img src="assets/socials_x.png" alt="follow me on X"></a>&emsp;
     <a href="https://www.reddit.com/user/0xff-r4bbit"><img src="assets/socials_reddit.png" alt="upvote my release posts on Reddit"></a>&emsp;
     <a href="https://www.instagram.com/0xff.r4bbit"><img src="assets/socials_instagram.png" alt="follow me on Instagram"></a>&emsp;
