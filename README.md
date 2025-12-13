@@ -2,7 +2,7 @@
 
 *because revision history is not learning*
 
-Watch Me Type is an open-source macOS app that types text into any active window in a way that resembles normal human typing. It is intended for students who want their drafting and revision process to unfold over time rather than appearing as a single completed action.
+Watch Me Type is an open-source macOS app that types text into any active window in a way that resembles normal human typing. It is intended for students who want their writing to have the impression of unfolding over time rather than appearing as a single completed action.
 
 ## Purpose
 
@@ -17,7 +17,7 @@ This approach misunderstands both writing and learning. Students do not write in
 The solution is not better detection; it's building actual relationships with students and evaluating the growth of their skills. That requires time, trust, and institutional support for teachers to design tasks that cannot be reduced to a final product check. 
 
 **To students:**
->I am giving you a calculator that makes it much easier to cheat on your math test, but it doesn't mean you don't need math in your life. *Apply yourself.*
+>I'm handing you a calculator that makes it much easier to cheat on your math test, but it doesn't mean you don't need math in your life. *Apply yourself.*
 
 **To my fellow teachers:**
 >Until institutions and governing bodies provide the necessary resources for you to adapt to this new age of AI, I am sorry for the chaos this will create in your classrooms.
@@ -49,10 +49,11 @@ The solution is not better detection; it's building actual relationships with st
 
 ## Usage Notes
 
-- While the app is typing, the computer cannot be used. ∴ start typing sessions only when you do not need the device.
+- While the app is typing, the device cannot be used. ∴ start typing sessions only when you do not need the device.
 - Do not complete an entire piece of writing in a single session if the goal is a realistic revision history.
 
 ## Screenshots
+
 <p align="center">
     <img src="assets/screenshots/main.png" alt="main window"><br>
     <em>main app window</em>
@@ -72,11 +73,12 @@ The solution is not better detection; it's building actual relationships with st
 
 ## Contributing
 
-I'm an English teacher so I'm certain there is room for improvement. Issues, pull requests, and feature suggestions are welcome.
+Issues, pull requests, and feature suggestions are welcome.
 
 ## Supporting this Project
 
 If you find this tool useful or believe in my cause, I would really appreciate your support.
+
 - A tip on **Ko-fi** or **Buy Me a Coffee** would help cover development time and ongoing maintenance.
 
 <p align="center">
