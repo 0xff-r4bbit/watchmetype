@@ -1,6 +1,6 @@
 # Watch Me Type
 
-**because revision history is not learning**
+*because revision history is not learning*
 
 Watch Me Type is an open-source macOS app that types text into any active window in a way that resembles normal human typing. It is intended for students who want their drafting and revision process to unfold over time rather than appearing as a single completed action.
 
@@ -14,7 +14,11 @@ This approach misunderstands both writing and learning. Students do not write in
 
 The solution is not better detection; it's building actual relationships with students and evaluating the growth of their skills. That requires time, trust, and institutional support for teachers to design tasks that cannot be reduced to a final product check. 
 
-You put teachers through school to learn about backwards-design and assessing for competencies. Give them the resources they need to actually practice them.
+**To my fellow teachers:**
+>Until institutions and governing bodies provide the necessary resources for you to adapt to this new age of AI, I do apologize for the chaos this will create in your classrooms.
+
+**To those in charge in education:**
+>You put teachers through school to learn about backwards design and competency-based assessments, but without time, staffing, and institutional support, especially with the students learning about AI faster than you can even figure out what they are, teachers have to resort to policing student work just to make sure the students *might* be learning. Please give them the resources they need to actually do their job well and, maybe, you just might prevent their burnout.
 
 ## Features
 
@@ -58,7 +62,7 @@ For each section, produce two exemplars:
 - one written in B2-level [Canadian / American / British] English
 - one written in C2-level English
 
-The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in signs-of-ai-writing.jpeg”.
+The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in "signs"-of-ai-writing.jpeg”.
 ````
 Attach a screenshot of Wikipedia's "Signs of AI Writing" page, like [this one](assets/signs-of-ai-writing.jpeg), to the prompt. *Do not use a PDF export of the Wikipedia page because somewhere down the line, if they don't already do so, Wikipedia may implement hidden instructions for LLMs scraping their data.*
 
@@ -91,11 +95,11 @@ This produces a visible drafting and revision trail.
 
 ## Contributing
 
-I'm just an English teacher so I'm certain there is room for improvement. Issues, pull requests, and feature suggestions are welcome.
+I'm an English teacher so I'm certain there is room for improvement. Issues, pull requests, and feature suggestions are welcome.
 
 ## Supporting this Project
 
-If you find this tool useful, or believe in my cause, support is appreciated.
+If you find this tool useful or believe in my cause, I would really appreciate your support.
 - A tip on **Ko-fi** or **Buy Me a Coffee** would help cover development time and ongoing maintenance.
 
 <p align="center">
@@ -116,7 +120,7 @@ If you find this tool useful, or believe in my cause, support is appreciated.
 ## Licence
 This project is released under a source-available licence.
 
-You are free to view, use, and modify the source code for personal and educational purposes. Commercial use, redistribution, hosting, or selling this software — including modified versions — is not permitted without explicit permission from the author.
+You are free to view, use, and modify the source code for personal and educational purposes. Commercial use, redistribution, hosting, or selling this software, including modified versions, is not permitted without explicit permission from the author.
 
 The source is shared to support transparency, learning, and community discussion, not to enable resale or unauthorised distribution.
 
