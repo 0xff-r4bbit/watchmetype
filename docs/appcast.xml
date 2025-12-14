@@ -1,5 +1,3 @@
-
-
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0"
      xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
@@ -34,8 +32,8 @@
         url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v1.0.0/WatchMeType-1.0.0.zip"
         sparkle:version="1"
         sparkle:shortVersionString="1.0.0"
-        sparkle:edSignature="PLACEHOLDER_SIGNATURE"
-        length="0"
+        sparkle:edSignature="Lro/H6z8efZwesthaBKVO2HtT7yI1ohx//z7Dtx7H20MdFEZi7QIHZ9qquwGRAS2HxbF4nnPa3Iraq1cqRs+Dw=="
+        length="1360544"
         type="application/octet-stream" />
     </item>
 
