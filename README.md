@@ -42,7 +42,7 @@ The solution is not better detection; it's building actual relationships with st
 
 ## Installation
 
-1. Download the DMG.
+1. Download [the DMG from the latest release](https://github.com/0xff-r4bbit/watchmetype/releases/latest/download/WatchMeType.dmg).
 2. Drag **Watch Me Type** into the **Applications** folder.
 3. Launch the app.
 4. When macOS asks, grant Accessibility access.
