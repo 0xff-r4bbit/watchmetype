@@ -90,7 +90,7 @@ If you find this tool useful or believe in my cause, I would really appreciate y
 
 <p align="center">
     <a href="https://x.com/0xff_r4bbit"><img src="assets/socials_x.png" alt="follow me on X"></a>&emsp;
-    <a href="https://www.reddit.com/user/0xff-r4bbit"><img src="assets/socials_reddit.png" alt="upvote my release posts on Reddit"></a>&emsp;
+    <a href="https://www.reddit.com/r/SideProject/comments/1po854x/i_made_an_opensource_macos_app_that_simulates/"><img src="assets/socials_reddit.png" alt="upvote my release posts on Reddit"></a>&emsp;
     <a href="https://www.instagram.com/0xff.r4bbit"><img src="assets/socials_instagram.png" alt="follow me on Instagram"></a>&emsp;
     <a href="https://bsky.app/profile/0xff-r4bbit.bsky.social"><img src="assets/socials_bluesky.png" alt="follow me on Bluesky"></a>&emsp;
     <a href="https://mastodon.social/@0xff_r4bbit"><img src="assets/socials_mastodon.png" alt="follow me on Mastodon"></a>&emsp;
