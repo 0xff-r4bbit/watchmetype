@@ -52,6 +52,23 @@ The solution is not better detection; it's building actual relationships with st
 - While the app is typing, the device cannot be used. ∴ start typing sessions only when you do not need the device.
 - Do not complete an entire piece of writing in a single session if the goal is a realistic revision history.
 
+### Effective Use
+
+This app works best as part of a longer writing process. Generate drafts *elsewhere*, then use Watch Me Type to reproduce how writing normally appears over time.
+
+When generating drafts, use a prompt like the one below. Replace bracketed text as needed.
+````
+Create a plan for the sections required for this [assignment / project / journal]. We will complete the sections one by one. 
+
+For each section, produce two exemplars:
+- one written in B2-level [Canadian / American / British] English
+- one written in C2-level English
+
+The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in "signs"-of-ai-writing.jpeg”.
+````
+
+Attach a screenshot of Wikipedia's "Signs of AI Writing" page, like [this one](assets/signs-of-ai-writing.jpeg), to the prompt. *Do not use a PDF export of the Wikipedia page because somewhere down the line, if they don't already do so, Wikipedia may implement hidden instructions for LLMs scraping their data.*
+
 ## Screenshots
 
 <p align="center">
