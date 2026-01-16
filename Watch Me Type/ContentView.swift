@@ -9,8 +9,10 @@ enum DurationUnit: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .minutes: return "minutes"
-        case .hours: return "hours"
+        case .minutes:
+            return "minutes"
+        case .hours:
+            return "hours"
         }
     }
 }
@@ -38,6 +40,17 @@ struct ContentView: View {
     @State private var desiredDurationValue: String = ""
     @State private var durationUnit: DurationUnit = .minutes
 
+    // Two-draft editing mode
+    @State private var inputTextDraft2: String = ""
+    @State private var useEditingMode: Bool = false
+    @State private var customEditingDuration: Bool = false
+    @State private var editingDurationValue: String = ""
+    @State private var editingDurationUnit: DurationUnit = .minutes
+
+    // Error state for editing failures
+    @State private var showEditingError: Bool = false
+    @State private var editingErrorMessage: String = ""
+
     @StateObject private var typingManager = TypingManager()
 
     private var isOverlayVisible: Bool {
@@ -54,16 +67,9 @@ struct ContentView: View {
                             .font(.title)
                             .bold()
 
-                        HStack(spacing: 4) {
-                            Text("an")
-                            Link("open-source", destination: URL(string: "https://github.com/0xff-r4bbit/watchmetype")!)
-                                .foregroundStyle(.blue)
-                                .underline()
-                                .hoverPointer()
-                            Text("macOS app that mimics human typing")
-                        }
-                        .font(.callout)
-                        .foregroundColor(.secondary)
+                        Text(.init("an [open-source](https://github.com/0xff-r4bbit/watchmetype) macOS app that mimics human typing"))
+                            .font(.callout)
+                            .foregroundColor(.secondary)
                     }
 
                     Spacer()
@@ -72,30 +78,95 @@ struct ContentView: View {
                 }
 
                 HStack(alignment: .top, spacing: 16) {
-                    // Left: source text editor in a rounded card, with placeholder
-                    ZStack(alignment: .topLeading) {
-                        TextEditor(text: $inputText)
-                            .focused($isInputFocused)
-                            .padding(8)
-                            .scrollIndicators(.hidden)
+                    // Conditional layout: Single draft vs Two drafts
+                    if useEditingMode {
+                        // Two-draft mode: Side-by-side editors
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Draft 1 (Starting Point)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
 
-                        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text("Paste the text you'd like to type here.")
-                                .foregroundColor(.secondary)
-                                .padding(.top, 14)
-                                .padding(.leading, 12)
+                                ZStack(alignment: .topLeading) {
+                                    TextEditor(text: $inputText)
+                                        .focused($isInputFocused)
+                                        .padding(8)
+                                        .scrollIndicators(.hidden)
+
+                                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Text("Paste your first draft here.")
+                                            .foregroundColor(.secondary)
+                                            .padding(.top, 14)
+                                            .padding(.leading, 12)
+                                    }
+                                }
+                                .frame(minHeight: 260)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color(NSColor.textBackgroundColor))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.secondary.opacity(0.3))
+                                )
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Draft 2 (Final Version)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+
+                                ZStack(alignment: .topLeading) {
+                                    TextEditor(text: $inputTextDraft2)
+                                        .padding(8)
+                                        .scrollIndicators(.hidden)
+
+                                    if inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Text("Paste your final draft here (optional).")
+                                            .foregroundColor(.secondary)
+                                            .padding(.top, 14)
+                                            .padding(.leading, 12)
+                                    }
+                                }
+                                .frame(minHeight: 260)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color(NSColor.textBackgroundColor))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.secondary.opacity(0.3))
+                                )
+                            }
                         }
+                    } else {
+                        // Single-draft mode (current behavior)
+                        ZStack(alignment: .topLeading) {
+                            TextEditor(text: $inputText)
+                                .focused($isInputFocused)
+                                .padding(8)
+                                .scrollIndicators(.hidden)
+
+                            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text("Paste the text you'd like to type here.")
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 14)
+                                    .padding(.leading, 12)
+                            }
+                        }
+                        .frame(minHeight: 260)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(NSColor.textBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.secondary.opacity(0.3))
+                        )
                     }
-                    .frame(minHeight: 260)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(NSColor.textBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.secondary.opacity(0.3))
-                    )
 
                     // Right: settings column
                     VStack(alignment: .leading, spacing: 16) {
@@ -190,7 +261,58 @@ struct ContentView: View {
                 )
                 .layoutPriority(1)
 
-                        Spacer()
+                        // Two-draft editing mode card
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(alignment: .center, spacing: 8) {
+                                Toggle("Enable", isOn: $useEditingMode)
+                                    .font(.subheadline)
+
+                                Text("Editing Mode")
+                                    .font(.headline)
+                                    .bold()
+
+                                Spacer()
+                            }
+
+                            if useEditingMode {
+                                Text("Type Draft 1, then edit it into Draft 2")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Toggle("Custom Editing Duration", isOn: $customEditingDuration)
+                                    .font(.subheadline)
+                                    .padding(.top, 4)
+
+                                if customEditingDuration {
+                                    HStack(alignment: .center, spacing: 8) {
+                                        Text("edit for at least")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                            .padding(.vertical, 4)
+
+                                        TextField("e.g. 5", text: $editingDurationValue)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 60)
+
+                                        Picker("", selection: $editingDurationUnit) {
+                                            ForEach(DurationUnit.allCases) { unit in
+                                                Text(unit.displayName).tag(unit)
+                                            }
+                                        }
+                                        .pickerStyle(.segmented)
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                }
+
+                            }
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.secondary.opacity(0.08))
+                        )
+                        .layoutPriority(1)
 
                         HStack {
                             Spacer()
@@ -200,6 +322,7 @@ struct ContentView: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
+                        .padding(.top, 8)
                     }
                     .frame(width: 320, alignment: .topLeading)
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -208,7 +331,10 @@ struct ContentView: View {
 
             }
             .padding()
-            .frame(minWidth: isOverlayVisible ? compactOverlayWidth : 750, minHeight: 540)
+            .frame(
+                minWidth: isOverlayVisible ? compactOverlayWidth : (useEditingMode ? 1000 : 750),
+                minHeight: useEditingMode ? 700 : 600
+            )
             .allowsHitTesting(!isOverlayVisible)
 
             if isOverlayVisible {
@@ -336,8 +462,6 @@ struct ContentView: View {
 
                         Button("Let's go again.") {
                             typingManager.stopTyping()
-                            inputText = ""
-                            desiredDurationValue = ""
                             restoreNormalWindowFrame()
                         }
                         .padding(.top, 14)
@@ -423,26 +547,77 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: useEditingMode) { _, _ in
+            // When toggling editing mode, reposition window to stay on screen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                adjustWindowPositionForEditingMode()
+            }
+        }
+        .onChange(of: typingManager.progressText) { _, newText in
+            if newText.contains("aborted due to verification failure") {
+                editingErrorMessage = """
+                Cursor position verification failed during editing.
+
+                This usually happens when:
+                • The document was modified externally
+                • The cursor was moved manually
+                • The application's text field behaves unexpectedly
+
+                Please try again, and avoid interacting with the document during editing.
+                """
+                showEditingError = true
+            }
+        }
         .alert("Get ready to start typing!", isPresented: $showStartConfirmation) {
             Button("Cancel", role: .cancel) {
                 // Just close the alert and return to the main screen
             }
 
             Button("Confirm") {
-                typingManager.startTyping(
-                    text: inputText,
-                    wpm: Int(targetWPM),
-                    countdown: 10,
-                    totalDurationSeconds: desiredDurationSeconds,
-                    simulateMistakes: true
-                )
+                if useEditingMode && !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // Two-phase mode: type Draft 1, then edit to Draft 2
+                    typingManager.startTwoPhaseTyping(
+                        draft1: inputText,
+                        draft2: inputTextDraft2,
+                        wpm: Int(targetWPM),
+                        countdown: 10,
+                        typingDuration: desiredDurationSeconds,
+                        editingDuration: editingDurationSeconds,
+                        simulateMistakes: true
+                    )
+                } else {
+                    // Single-draft mode (existing behavior)
+                    typingManager.startTyping(
+                        text: inputText,
+                        wpm: Int(targetWPM),
+                        countdown: 10,
+                        totalDurationSeconds: desiredDurationSeconds,
+                        simulateMistakes: true
+                    )
+                }
             }
         } message: {
-    Text("""
-You’ll have 10 seconds to switch to the window where the text will go. 
+            if useEditingMode && !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("""
+You'll have 10 seconds to switch windows.
+Phase 1: Type Draft 1 completely
+Phase 2: Edit Draft 1 into Draft 2
+Press ESC to pause.
+""")
+            } else {
+                Text("""
+You'll have 10 seconds to switch to the window where the text will go.
 To pause, press ESC or switch apps.
 """)
-}
+            }
+        }
+        .alert("Editing Error", isPresented: $showEditingError) {
+            Button("OK", role: .cancel) {
+                typingManager.stopTyping()
+            }
+        } message: {
+            Text(editingErrorMessage)
+        }
     }
 
     private func flashEstimate() {
@@ -468,7 +643,13 @@ To pause, press ESC or switch apps.
                 return "Preparing to start…"
             }
         case .typing:
-            return typingManager.isThinking ? "🤔 Thinking 🤔" : "⌨️ Typing ⌨️"
+            let phaseIndicator = useEditingMode && !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Phase 1: " : ""
+            return typingManager.isThinking
+                ? "\(phaseIndicator)🤔 Thinking 🤔"
+                : "\(phaseIndicator)⌨️ Typing ⌨️"
+        case .editing:
+            return "Phase 2: ✏️ Editing ✏️"
         case .paused:
             return "⏸ Paused ⏸"
         }
@@ -588,6 +769,23 @@ To pause, press ESC or switch apps.
             return value * 3600
         }
     }
+
+    private var editingDurationSeconds: TimeInterval? {
+        guard customEditingDuration,
+              let value = Double(editingDurationValue.replacingOccurrences(of: ",", with: ".")),
+              value > 0
+        else {
+            return nil
+        }
+
+        switch editingDurationUnit {
+        case .minutes:
+            return value * 60
+        case .hours:
+            return value * 3600
+        }
+    }
+
     private func processInputText() {
         var text = inputText
 
@@ -736,6 +934,29 @@ To pause, press ESC or switch apps.
         }
     }
 
+    private func adjustWindowPositionForEditingMode() {
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+        let currentFrame = window.frame
+        var newFrame = currentFrame
+
+        // If window extends past right edge, anchor it to the right edge
+        if newFrame.maxX > screenFrame.maxX {
+            newFrame.origin.x = screenFrame.maxX - newFrame.size.width - 20
+        }
+
+        // Ensure window stays within vertical bounds
+        if newFrame.maxY > screenFrame.maxY {
+            newFrame.origin.y = screenFrame.maxY - newFrame.size.height - 20
+        }
+        if newFrame.minY < screenFrame.minY {
+            newFrame.origin.y = screenFrame.minY + 20
+        }
+
+        window.setFrame(newFrame, display: true, animate: true)
+    }
+
     private func restoreNormalWindowFrame() {
         guard let normal = storedNormalWindowFrame else { return }
         guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
@@ -785,8 +1006,7 @@ To pause, press ESC or switch apps.
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Allow Accessibility access"
-            alert.informativeText =
-            """
+            alert.informativeText = """
             Please grant me Accessibility access so I can type for you.
             """
             alert.addButton(withTitle: "Continue")

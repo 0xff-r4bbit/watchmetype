@@ -3,14 +3,32 @@ import Combine
 import ApplicationServices
 import AppKit
 
+/// Arrow key directions for navigation
+enum ArrowDirection {
+    case left
+    case right
+    case up
+    case down
+}
+
+/// Keyboard modifiers for special key combinations
+enum KeyModifier {
+    case option
+    case command
+    case shift
+}
+
 final class TypingManager: NSObject, ObservableObject {
     enum TypingState {
         case idle
         case countingDown
         case typing
+        case editing
         case paused
     }
-    
+
+    // Backwards editing state removed - now using EditWithPosition from EditOperationConverter
+
     @Published var state: TypingState = .idle
     @Published var countdownRemaining: Int = 0
     @Published var progressText: String = ""
@@ -52,13 +70,36 @@ final class TypingManager: NSObject, ObservableObject {
     private var extraDelayPerSentenceEnd: TimeInterval = 0
     private var extraDelayPerParagraphBreak: TimeInterval = 0
     
-    // Focus tracking
-    private var targetAppPID: pid_t?
+    // Focus tracking - track specific window, not just app
+    private var targetWindowTitle: String?
+    private var targetAppPID: pid_t?  // Keep as backup for window title comparison
 
     // Global Esc key handling
     private var escEventTap: CFMachPort?
     private var escRunLoopSource: CFRunLoopSource?
-    
+
+    // Backwards editing state
+    private var draft1Text: String?                      // Original text (Draft 1)
+    private var draft2Text: String?                      // Target text (Draft 2)
+    private var positionedEdits: [EditWithPosition] = [] // Edit operations with positions (sorted right-to-left)
+    private var currentEditIndex: Int = 0                // Current edit being executed
+    private var actualCursorPosition: Int = 0            // Actual cursor position in the modified text
+    private var customEditingDuration: TimeInterval?
+
+    // Edit-phase character typing state (mirrors typing phase for reliability)
+    private var editCharsToType: [Character] = []        // Characters being inserted during an edit
+    private var editCharIndex: Int = 0                   // Current index in editCharsToType
+    private var editCharCompletion: (() -> Void)?        // Completion handler when done typing
+    private var editCharWorkItem: DispatchWorkItem?      // Cancellable work item for edit typing
+    private var editCharPreviousChar: Character?         // Previous character for extra delay calculation
+
+    // Editing delay configuration - uses slower delays universally to work with all editors
+    // including web-based editors like Google Docs
+    private var editingDelayMultiplier: Double = 5.0     // Universal speed for all editors (higher = more reliable)
+
+    // Periodic focus checker (safety net for missed window switches)
+    private var focusCheckTimer: Timer?
+
     override init() {
         super.init()
         
@@ -174,15 +215,24 @@ final class TypingManager: NSObject, ObservableObject {
     func stopTyping() {
         countdownTimer?.invalidate()
         countdownTimer = nil
-        
+
         typingWorkItem?.cancel()
         typingWorkItem = nil
-        
+
+        // Cancel edit character typing work item
+        editCharWorkItem?.cancel()
+        editCharWorkItem = nil
+        editCharCompletion = nil
+        editCharsToType = []
+
+        stopPeriodicFocusCheck()
+
         state = .idle
         countdownRemaining = 0
         progressText = ""
         isThinking = false
         targetAppPID = nil
+        targetWindowTitle = nil
         lastCompletionDate = nil
         progressFraction = 0.0
     }
@@ -199,13 +249,19 @@ final class TypingManager: NSObject, ObservableObject {
         typingStartDate = Date()
         progressFraction = 0.0
 
-        // At the moment typing begins, record the current frontmost app
+        // At the moment typing begins, record the current frontmost app and window
         // as the intended typing target.
         targetAppPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        targetWindowTitle = getFocusedWindowTitle()
+
+        print("DEBUG: Starting typing in window: '\(targetWindowTitle ?? "unknown")'")
 
         state = .typing
         progressText = "Typing in progress…"
         isThinking = false
+
+        // Start periodic focus check (every 0.5 seconds) as safety net
+        startPeriodicFocusCheck()
 
         scheduleNextCharacter(after: interCharacterDelay)
     }
@@ -228,15 +284,18 @@ final class TypingManager: NSObject, ObservableObject {
     
     private func typeNextCharacter() {
         guard state == .typing else { return }
-        
+
         guard currentIndex < textToType.count else {
             finishTyping()
             return
         }
-        
-        // Safety check: if the user has switched away from the target app,
-        // pause typing instead of sending characters into the wrong window.
-        if !isTargetAppFrontmost() {
+
+        // CRITICAL: Check focus BEFORE typing each character
+        // This ensures we NEVER type even a single character in the wrong window
+        if !isTargetWindowFocused() {
+            let currentWindow = getFocusedWindowTitle()
+            print("DEBUG: Focus check before character - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
+            print("DEBUG: Not in target window, pausing typing")
             pauseTyping()
             return
         }
@@ -280,55 +339,98 @@ final class TypingManager: NSObject, ObservableObject {
         typingWorkItem?.cancel()
         typingWorkItem = nil
 
-        DispatchQueue.main.async {
-            if let start = self.typingStartDate {
-                self.lastRunDuration = Date().timeIntervalSince(start)
-                self.typingStartDate = nil
+        stopPeriodicFocusCheck()
+
+        // Check if we need to transition to editing phase
+        if let draft2 = draft2Text, !draft2.isEmpty {
+            // Convert textToType back to string for draft1
+            let draft1 = String(textToType)
+
+            // Pause for 2 seconds before editing (simulates "reviewing Draft 1")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                guard let self = self else { return }
+                self.startEditing(
+                    draft1: draft1,
+                    draft2: draft2,
+                    customDuration: self.customEditingDuration
+                )
             }
-            self.progressFraction = 1.0
-            self.state = .idle
-            self.lastCompletionDate = Date()
-            self.progressText = "Typing complete."
-            self.isThinking = false
-            self.targetAppPID = nil
+        } else {
+            // Normal single-draft completion
+            DispatchQueue.main.async {
+                if let start = self.typingStartDate {
+                    self.lastRunDuration = Date().timeIntervalSince(start)
+                    self.typingStartDate = nil
+                }
+                self.progressFraction = 1.0
+                self.state = .idle
+                self.lastCompletionDate = Date()
+                self.progressText = "Typing complete."
+                self.isThinking = false
+                self.targetAppPID = nil
+                self.targetWindowTitle = nil
+            }
         }
     }
     
     // MARK: - Pause / resume on app focus changes
     
     @objc private func handleActiveAppChange(_ notification: Notification) {
-        guard let runningApp = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+        guard notification.userInfo?[NSWorkspace.applicationUserInfoKey] is NSRunningApplication else {
             return
         }
-        
-        let newPID = runningApp.processIdentifier
-        
-        guard let targetPID = targetAppPID else {
+
+        guard targetAppPID != nil else {
             return
         }
-        
-        switch state {
-        case .typing:
-            // If we leave the target app, pause.
-            if newPID != targetPID {
-                pauseTyping()
+
+        // Small delay to let window focus settle before checking window title
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self else { return }
+
+            let isTargetFocused = self.isTargetWindowFocused()
+            let currentWindowTitle = self.getFocusedWindowTitle()
+
+            print("DEBUG: App change - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindowTitle ?? "none")' Focused: \(isTargetFocused)")
+
+            switch self.state {
+            case .typing:
+                // If we leave the target window, pause
+                if !isTargetFocused {
+                    print("DEBUG: Leaving target window, pausing typing")
+                    self.pauseTyping()
+                }
+            case .editing:
+                // If we leave the target window during editing, pause
+                if !isTargetFocused {
+                    print("DEBUG: Leaving target window, pausing editing")
+                    self.pauseEditing()
+                }
+            case .paused:
+                // If we come back to the target window, resume
+                if isTargetFocused {
+                    print("DEBUG: Returned to target window, resuming")
+                    // Determine whether to resume typing or editing
+                    if self.draft2Text != nil {
+                        self.resumeEditing()
+                    } else {
+                        self.resumeTyping()
+                    }
+                }
+            default:
+                break
             }
-        case .paused:
-            // If we come back to the target app, resume.
-            if newPID == targetPID {
-                resumeTyping()
-            }
-        default:
-            break
         }
     }
     
     private func pauseTyping() {
         guard state == .typing else { return }
-        
+
         typingWorkItem?.cancel()
         typingWorkItem = nil
-        
+
+        stopPeriodicFocusCheck()
+
         DispatchQueue.main.async {
             self.state = .paused
             self.isThinking = false
@@ -346,12 +448,18 @@ final class TypingManager: NSObject, ObservableObject {
             self.isThinking = false
         }
 
+        // Restart periodic focus check
+        startPeriodicFocusCheck()
+
         scheduleNextCharacter(after: interCharacterDelay)
     }
 
     // Resume with a short countdown (for user-initiated Resume)
     func resumeWithCountdown(_ seconds: Int = 5) {
         guard state == .paused else { return }
+
+        // Determine what we're resuming from
+        let isResumingEditing = draft2Text != nil
 
         countdownTimer?.invalidate()
         countdownRemaining = seconds
@@ -370,21 +478,109 @@ final class TypingManager: NSObject, ObservableObject {
                     self.progressText = "Resuming in \(self.countdownRemaining) seconds… Switch back to your document."
                 } else {
                     timer.invalidate()
-                    self.beginTypingLoop()
+                    if isResumingEditing {
+                        self.resumeEditing()
+                    } else {
+                        self.beginTypingLoop()
+                    }
                 }
             }
         }
     }
     
-    private func isTargetAppFrontmost() -> Bool {
-        guard let targetPID = targetAppPID else {
-            // If we don't have a recorded target app, allow typing.
+    // MARK: - Periodic Focus Checking
+
+    /// Starts a timer to periodically check if we're still in the target window
+    /// This is a safety net in case NSWorkspace notifications are missed
+    private func startPeriodicFocusCheck() {
+        // Stop any existing timer
+        stopPeriodicFocusCheck()
+
+        // Check every 0.5 seconds
+        focusCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+
+            // Only check during active typing/editing states
+            guard self.state == .typing || self.state == .editing else {
+                return
+            }
+
+            // Check if we're still in the target window
+            if !self.isTargetWindowFocused() {
+                let currentWindow = self.getFocusedWindowTitle()
+                print("DEBUG: Periodic check detected window switch - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
+
+                // Pause based on current state
+                if self.state == .typing {
+                    print("DEBUG: Auto-pausing typing")
+                    self.pauseTyping()
+                } else if self.state == .editing {
+                    print("DEBUG: Auto-pausing editing")
+                    self.pauseEditing()
+                }
+            }
+        }
+    }
+
+    /// Stops the periodic focus check timer
+    private func stopPeriodicFocusCheck() {
+        focusCheckTimer?.invalidate()
+        focusCheckTimer = nil
+    }
+
+    /// Gets the title of the currently focused window using Accessibility API
+    private func getFocusedWindowTitle() -> String? {
+        // Get the frontmost application
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
+
+        let pid = app.processIdentifier
+        let appElement = AXUIElementCreateApplication(pid)
+
+        // Get the focused window
+        var focusedWindow: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &focusedWindow)
+
+        guard result == .success, let window = focusedWindow else {
+            return nil
+        }
+
+        // Get the window's title
+        var title: CFTypeRef?
+        let titleResult = AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &title)
+
+        guard titleResult == .success, let windowTitle = title as? String else {
+            return nil
+        }
+
+        return windowTitle
+    }
+
+    private func isTargetWindowFocused() -> Bool {
+        guard let targetTitle = targetWindowTitle, let targetPID = targetAppPID else {
+            // If we don't have a recorded target, allow typing
             return true
         }
+
+        // Check if the frontmost app matches (quick check)
         guard let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+            return false
+        }
+
+        // If app doesn't match, definitely not the right window
+        if frontmostPID != targetPID {
+            return false
+        }
+
+        // App matches, now check specific window
+        guard let currentWindowTitle = getFocusedWindowTitle() else {
+            // Can't determine window title - assume it's okay to continue
             return true
         }
-        return frontmostPID == targetPID
+
+        // Compare window titles
+        return currentWindowTitle == targetTitle
     }
     
     
@@ -498,16 +694,24 @@ final class TypingManager: NSObject, ObservableObject {
     private func sendCharacter(_ character: Character) {
         let source = CGEventSource(stateID: .hidSystemState)
 
+        // Debug: Log that we're inside sendCharacter
+        let unicodeVal = character.unicodeScalars.first?.value ?? 0
+        print("  -> sendCharacter called: '\(character)' (U+\(String(format: "%04X", unicodeVal)))")
+
         // Special-case newlines: send a real Return key event so apps treat it
         // exactly like pressing the Enter/Return key, instead of a raw "\n".
         if character == "\n" || character == "\r" {
             let returnKeyCode: CGKeyCode = 0x24 // kVK_Return
-            
+
             guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: true),
                   let keyUp = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: false) else {
                 return
             }
-            
+
+            // Explicitly clear modifier flags
+            keyDown.flags = []
+            keyUp.flags = []
+
             keyDown.post(tap: .cghidEventTap)
             keyUp.post(tap: .cghidEventTap)
             return
@@ -517,16 +721,21 @@ final class TypingManager: NSObject, ObservableObject {
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
             return
         }
-        
+
+        // Explicitly clear all modifier flags to prevent any flag pollution
+        // from prior key events (arrow keys, forward delete, etc.)
+        keyDown.flags = []
+        keyUp.flags = []
+
         let string = String(character)
         let utf16 = Array(string.utf16)
-        
+
         utf16.withUnsafeBufferPointer { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
-            
+
             keyDown.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
             keyUp.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
-            
+
             keyDown.post(tap: .cghidEventTap)
             keyUp.post(tap: .cghidEventTap)
         }
@@ -582,7 +791,7 @@ final class TypingManager: NSObject, ObservableObject {
             guard let self = self else { return }
             
             // If the user has switched apps, pause instead of correcting in the wrong place.
-            if !self.isTargetAppFrontmost() {
+            if !self.isTargetWindowFocused() {
                 self.pauseTyping()
                 return
             }
@@ -628,17 +837,571 @@ final class TypingManager: NSObject, ObservableObject {
     
     private func sendBackspace() {
         let source = CGEventSource(stateID: .hidSystemState)
-        let backspaceKeyCode: CGKeyCode = 0x33 // Delete key
-        
+        let backspaceKeyCode: CGKeyCode = 0x33 // Delete key (backward delete)
+
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: backspaceKeyCode, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: backspaceKeyCode, keyDown: false) else {
             return
         }
-        
+
+        // Explicitly clear modifier flags
+        keyDown.flags = []
+        keyUp.flags = []
+
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
     }
-    
+
+    private func sendForwardDelete() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        let forwardDeleteKeyCode: CGKeyCode = 0x75 // Forward Delete key (fn+delete)
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: forwardDeleteKeyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: forwardDeleteKeyCode, keyDown: false) else {
+            return
+        }
+
+        // Explicitly clear modifier flags
+        keyDown.flags = []
+        keyUp.flags = []
+
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    // MARK: - Clipboard Operations
+
+    /// Sends Cmd+C to copy selected text to clipboard
+    private func sendCopyCommand() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        let keyCode: CGKeyCode = 0x08  // 'C' key
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+            return
+        }
+
+        // Set Command modifier flag
+        keyDown.flags = .maskCommand
+
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    // Note: sendFindCommand removed - backwards editing doesn't use Find navigation
+
+    private func sendReturnKey() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        let returnKeyCode: CGKeyCode = 0x24  // Return key
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: false) else {
+            return
+        }
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    private func sendEscapeKey() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        let escapeKeyCode: CGKeyCode = 0x35  // Escape key
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: escapeKeyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: escapeKeyCode, keyDown: false) else {
+            return
+        }
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    /// Reads current text from system clipboard
+    private func readClipboard() -> String? {
+        let pasteboard = NSPasteboard.general
+        return pasteboard.string(forType: .string)
+    }
+
+    /// Writes text to system clipboard (for testing or future use)
+    private func writeClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    private func sendArrowKey(_ direction: ArrowDirection, withModifier modifier: KeyModifier? = nil) {
+        let source = CGEventSource(stateID: .hidSystemState)
+
+        let keyCode: CGKeyCode = switch direction {
+            case .left: 0x7B    // kVK_LeftArrow
+            case .right: 0x7C   // kVK_RightArrow
+            case .up: 0x7E      // kVK_UpArrow
+            case .down: 0x7D    // kVK_DownArrow
+        }
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+            return
+        }
+
+        // Explicitly set flags - either the modifier or empty
+        if let modifier = modifier {
+            let flags: CGEventFlags = switch modifier {
+                case .option: .maskAlternate
+                case .command: .maskCommand
+                case .shift: .maskShift
+            }
+            keyDown.flags = flags
+            keyUp.flags = [] // Release modifier on key up
+        } else {
+            // No modifier - explicitly clear all flags
+            keyDown.flags = []
+            keyUp.flags = []
+        }
+
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    // MARK: - Two-Phase Editing Mode
+
+    func startTwoPhaseTyping(
+        draft1: String,
+        draft2: String,
+        wpm: Int,
+        countdown: Int = 10,
+        typingDuration: TimeInterval? = nil,
+        editingDuration: TimeInterval? = nil,
+        simulateMistakes: Bool = false
+    ) {
+        // Store draft2 and editing duration for later use
+        self.draft2Text = draft2
+        self.customEditingDuration = editingDuration
+
+        // Start with normal typing of draft1
+        startTyping(
+            text: draft1,
+            wpm: wpm,
+            countdown: countdown,
+            totalDurationSeconds: typingDuration,
+            simulateMistakes: simulateMistakes
+        )
+    }
+
+    // MARK: - Backwards Editing
+
+    private func startEditing(draft1: String, draft2: String, customDuration: TimeInterval?) {
+        // Check if drafts are identical - skip editing if so
+        if draft1 == draft2 {
+            finishEditing()
+            return
+        }
+
+        draft2Text = draft2
+
+        print("DEBUG TypingManager: Starting backwards editing")
+        print("  Draft 1 length: \(draft1.count)")
+        print("  Draft 2 length: \(draft2.count)")
+
+        // Step 1: Compute positioned edits (sorted right-to-left)
+        positionedEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2)
+        print("DEBUG: Generated \(positionedEdits.count) positioned edits")
+
+        // Step 2: Initialize editing state
+        state = .editing
+        progressText = "Editing Draft 1 into Draft 2…"
+        progressFraction = 0.5
+        isThinking = false
+        currentEditIndex = 0
+        actualCursorPosition = draft1.count // Cursor starts at end of draft1
+
+        // Start periodic focus check for editing phase
+        startPeriodicFocusCheck()
+
+        // Pause briefly before starting edits (simulates reviewing Draft 1)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.executeNextEditBackwards()
+        }
+    }
+
+    /// Executes edits sequentially using backwards editing (right-to-left)
+    private func executeNextEditBackwards() {
+        guard state == .editing else { return }
+        guard currentEditIndex < positionedEdits.count else {
+            finishEditing()
+            return
+        }
+
+        // CRITICAL: Check focus BEFORE each editing operation
+        // This ensures we NEVER edit in the wrong window
+        if !isTargetWindowFocused() {
+            let currentWindow = getFocusedWindowTitle()
+            print("DEBUG: Focus check before edit - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
+            print("DEBUG: Not in target window, pausing editing")
+            pauseEditing()
+            return
+        }
+
+        let edit = positionedEdits[currentEditIndex]
+        print("DEBUG: Executing edit \(currentEditIndex + 1)/\(positionedEdits.count)")
+        print("  Actual cursor position: \(actualCursorPosition)")
+        print("  Target position (draft1): \(edit.position)")
+
+        // Navigate to the edit position and execute it
+        navigateAndExecuteEdit(edit)
+    }
+
+    /// Navigates to the edit position and executes it
+    /// Key insight: For right-to-left editing, draft1 positions < current edit position are unchanged
+    /// Always uses relative navigation (left arrows) to work correctly with pre-existing document content
+    private func navigateAndExecuteEdit(_ edit: EditWithPosition) {
+        let targetPosition = edit.position
+        let leftMoveCount = actualCursorPosition - targetPosition
+
+        if leftMoveCount > 0 {
+            print("  Moving left: \(leftMoveCount) characters")
+            navigateLeftAndExecute(count: leftMoveCount, edit: edit)
+        } else {
+            // Already at the position - still pause before edit
+            let preEditDelay = 0.2 * editingDelayMultiplier
+            DispatchQueue.main.asyncAfter(deadline: .now() + preEditDelay) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                self.executeEditAtCurrentPosition(edit)
+            }
+        }
+    }
+
+    /// Navigate left by arrow keys
+    private func navigateLeftAndExecute(count: Int, edit: EditWithPosition) {
+        let navigationDelay = 0.08 * editingDelayMultiplier
+        sendKeysWithDelay(count: count, delay: navigationDelay) {
+            self.sendArrowKey(.left)
+        } completion: { [weak self] in
+            guard let self = self, self.state == .editing else { return }
+
+            // Short pause after navigation before editing
+            let postNavigationDelay = 0.3 * self.editingDelayMultiplier
+            DispatchQueue.main.asyncAfter(deadline: .now() + postNavigationDelay) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                self.executeEditAtCurrentPosition(edit)
+            }
+        }
+    }
+
+    /// Executes a single edit operation (delete, insert, or replace) at the current cursor position
+    /// Updates actualCursorPosition based on the operation performed
+    private func executeEditAtCurrentPosition(_ edit: EditWithPosition) {
+        let targetPosition = edit.position
+
+        switch edit.operation {
+        case .delete(let count):
+            print("DEBUG: Deleting \(count) characters with forward delete")
+            // Delete characters one at a time using forward delete (simpler, more reliable)
+            let deleteDelay = 0.1 * editingDelayMultiplier
+            sendKeysWithDelay(count: count, delay: deleteDelay) {
+                self.sendForwardDelete()
+            } completion: { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+
+                // After deleting, cursor stays at targetPosition
+                self.actualCursorPosition = targetPosition
+                print("DEBUG: Deleted \(count) chars, cursor now at \(self.actualCursorPosition)")
+
+                // Short pause after deletion
+                let postDeleteDelay = 0.3 * self.editingDelayMultiplier
+                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.completeCurrentEditBackwards()
+                }
+            }
+
+        case .insert(let text):
+            print("DEBUG: Inserting '\(text.prefix(20))\(text.count > 20 ? "..." : "")'")
+            let baseDelay = max(0.05, interCharacterDelay)
+            let delay = baseDelay * editingDelayMultiplier
+            sendCharactersWithDelay(text, delay: delay) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+
+                // After insertion, cursor is at targetPosition + inserted text length
+                // NO move-back needed! We track actual position for next navigation
+                self.actualCursorPosition = targetPosition + text.count
+                print("DEBUG: Inserted \(text.count) chars, cursor now at \(self.actualCursorPosition)")
+
+                // Longer pause after insert to let web editors catch up
+                let postInsertDelay = 0.3 * self.editingDelayMultiplier
+                DispatchQueue.main.asyncAfter(deadline: .now() + postInsertDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.completeCurrentEditBackwards()
+                }
+            }
+
+        case .replace(let oldCount, let newText):
+            print("DEBUG: Replacing \(oldCount) chars with '\(newText.prefix(30))\(newText.count > 30 ? "..." : "")'")
+            executeReplace(oldCount: oldCount, newText: newText) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+
+                // After replace, cursor is at targetPosition + new text length
+                // NO move-back needed!
+                self.actualCursorPosition = targetPosition + newText.count
+                print("DEBUG: Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)")
+
+                // Longer pause after replace to let web editors catch up
+                let postReplaceDelay = 0.3 * self.editingDelayMultiplier
+                DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.completeCurrentEditBackwards()
+                }
+            }
+
+        default:
+            // Other operations not used in backwards editing
+            completeCurrentEditBackwards()
+        }
+    }
+
+    /// Executes an atomic replace operation: delete oldCount chars with forward delete, then insert newText
+    private func executeReplace(oldCount: Int, newText: String, completion: @escaping () -> Void) {
+        // Step 1: Delete forward by oldCount using forward delete (simpler than selection)
+        if oldCount > 0 {
+            let deleteDelay = 0.1 * editingDelayMultiplier
+            sendKeysWithDelay(count: oldCount, delay: deleteDelay) {
+                self.sendForwardDelete()
+            } completion: { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+
+                // Short pause after deletion before typing
+                let postDeleteDelay = 0.3 * self.editingDelayMultiplier
+                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    // Step 2: Insert new text (if any)
+                    if !newText.isEmpty {
+                        let baseDelay = max(0.05, self.interCharacterDelay)
+                        let delay = baseDelay * self.editingDelayMultiplier
+                        self.sendCharactersWithDelay(newText, delay: delay) {
+                            completion()
+                        }
+                    } else {
+                        completion()
+                    }
+                }
+            }
+        } else {
+            // Just insert (pure insertion, no deletion)
+            if !newText.isEmpty {
+                let baseDelay = max(0.05, self.interCharacterDelay)
+                let delay = baseDelay * self.editingDelayMultiplier
+                self.sendCharactersWithDelay(newText, delay: delay) {
+                    completion()
+                }
+            } else {
+                completion()
+            }
+        }
+    }
+
+    /// Completes the current edit and moves to the next one
+    private func completeCurrentEditBackwards() {
+        currentEditIndex += 1
+
+        // Update progress
+        let progress = Double(currentEditIndex) / Double(positionedEdits.count)
+        DispatchQueue.main.async {
+            self.progressFraction = 0.5 + (progress * 0.5)
+        }
+
+        // Move to next edit
+        executeNextEditBackwards()
+    }
+
+    private func sendKeysWithDelay(count: Int, delay: TimeInterval, keyAction: @escaping () -> Void, completion: @escaping () -> Void) {
+        var remaining = count
+
+        func sendNext() {
+            // Stop immediately if user cancelled
+            guard self.state == .typing || self.state == .editing else { return }
+
+            guard remaining > 0 else {
+                completion()
+                return
+            }
+
+            keyAction()
+            remaining -= 1
+
+            if remaining > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard self != nil else { return }
+                    sendNext()
+                }
+            } else {
+                // Add delay after last key to let web editors process it
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard self != nil else { return }
+                    completion()
+                }
+            }
+        }
+
+        sendNext()
+    }
+
+    /// Starts typing characters for an edit operation using the same mechanism as the typing phase.
+    /// This ensures reliable character delivery to web editors like Google Docs.
+    private func sendCharactersWithDelay(_ text: String, delay: TimeInterval, completion: @escaping () -> Void) {
+        guard !text.isEmpty else {
+            completion()
+            return
+        }
+
+        // Initialize edit character typing state (mirrors typing phase)
+        editCharsToType = Array(text)
+        editCharIndex = 0
+        editCharCompletion = completion
+        editCharPreviousChar = nil
+
+        // Start typing using the same scheduling mechanism as typing phase
+        scheduleNextEditChar(after: 0) // Start immediately
+    }
+
+    /// Schedules the next edit character - mirrors scheduleNextCharacter from typing phase
+    private func scheduleNextEditChar(after delay: TimeInterval) {
+        guard editCharIndex < editCharsToType.count else {
+            // All characters typed - call completion after a final delay
+            let finalDelay = interCharacterDelay * editingDelayMultiplier
+            DispatchQueue.main.asyncAfter(deadline: .now() + finalDelay) { [weak self] in
+                guard let self = self else { return }
+                self.editCharCompletion?()
+                self.editCharCompletion = nil
+            }
+            return
+        }
+
+        // Cancel any existing work item (mirrors typing phase)
+        editCharWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.typeNextEditChar()
+        }
+
+        editCharWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    /// Types the next edit character - mirrors typeNextCharacter from typing phase
+    private func typeNextEditChar() {
+        // Stop if user cancelled
+        guard state == .editing else { return }
+
+        guard editCharIndex < editCharsToType.count else {
+            editCharCompletion?()
+            editCharCompletion = nil
+            return
+        }
+
+        let character = editCharsToType[editCharIndex]
+        let charIndex = editCharIndex
+        editCharIndex += 1
+
+        // Log each character being sent for debugging
+        let unicodeValue = character.unicodeScalars.first?.value ?? 0
+        print("DEBUG CHAR[\(charIndex)]: Sending '\(character)' (U+\(String(format: "%04X", unicodeValue)))")
+
+        // Send the character (same as typing phase)
+        sendCharacter(character)
+
+        // Calculate delay using the same extraDelay logic as typing phase
+        let baseDelay = max(0.05, interCharacterDelay)
+        let extra = extraDelay(afterTyping: character)
+        let nextDelay = (baseDelay + extra) * editingDelayMultiplier
+
+        editCharPreviousChar = character
+
+        // Schedule next character (mirrors typing phase)
+        scheduleNextEditChar(after: nextDelay)
+    }
+
+    private func pauseEditing() {
+        guard state == .editing else { return }
+
+        typingWorkItem?.cancel()
+        typingWorkItem = nil
+
+        stopPeriodicFocusCheck()
+
+        DispatchQueue.main.async {
+            self.state = .paused
+            self.isThinking = false
+            self.progressText = "Press Resume to continue editing."
+        }
+    }
+
+    private func resumeEditing() {
+        guard state == .paused else { return }
+
+        DispatchQueue.main.async {
+            self.state = .editing
+            self.progressText = "Resumed editing…"
+            self.isThinking = false
+        }
+
+        // Restart periodic focus check
+        startPeriodicFocusCheck()
+
+        executeNextEditBackwards()
+    }
+
+    private func finishEditing() {
+        typingWorkItem?.cancel()
+        typingWorkItem = nil
+
+        stopPeriodicFocusCheck()
+
+        DispatchQueue.main.async {
+            if let start = self.typingStartDate {
+                self.lastRunDuration = Date().timeIntervalSince(start)
+            }
+            self.progressFraction = 1.0
+            self.state = .idle
+            self.lastCompletionDate = Date()
+            self.progressText = "Editing complete."
+            self.isThinking = false
+            self.targetAppPID = nil
+            self.targetWindowTitle = nil
+
+            // Clear editing state
+            self.draft2Text = nil
+            self.positionedEdits = []
+            self.currentEditIndex = 0
+            self.actualCursorPosition = 0
+            self.customEditingDuration = nil
+        }
+    }
+
+    /// Aborts editing with an error message
+    private func abortEditingWithError(_ errorMessage: String) {
+        typingWorkItem?.cancel()
+        typingWorkItem = nil
+
+        stopPeriodicFocusCheck()
+
+        print("ERROR TypingManager: \(errorMessage)")
+
+        DispatchQueue.main.async {
+            self.state = .idle
+            self.isThinking = false
+            self.progressText = "Editing aborted due to error."
+            self.progressFraction = Double(self.currentEditIndex) / Double(max(1, self.positionedEdits.count))
+
+            // Show detailed error in console/UI
+            NSLog("Editing aborted: \(errorMessage)")
+
+            // Clear editing state
+            self.draft2Text = nil
+            self.positionedEdits = []
+            self.currentEditIndex = 0
+            self.actualCursorPosition = 0
+            self.customEditingDuration = nil
+        }
+    }
+
     // MARK: - Esc key handling
 
     private func setupEscEventTap() {
@@ -685,9 +1448,11 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     private func handleEscPressed() {
-        // Only meaningful while actively typing.
+        // Pause during typing or editing
         if state == .typing {
             pauseTyping()
+        } else if state == .editing {
+            pauseEditing()
         }
     }
 }
