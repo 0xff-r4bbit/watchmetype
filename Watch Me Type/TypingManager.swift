@@ -18,14 +18,16 @@ enum KeyModifier {
     case shift
 }
 
+/// Typing states for TypingManager (defined outside class for Swift 6 Sendable conformance)
+enum TypingState: Sendable, Equatable {
+    case idle
+    case countingDown
+    case typing
+    case editing
+    case paused
+}
+
 final class TypingManager: NSObject, ObservableObject {
-    enum TypingState {
-        case idle
-        case countingDown
-        case typing
-        case editing
-        case paused
-    }
 
     // Backwards editing state removed - now using EditWithPosition from EditOperationConverter
 
@@ -35,10 +37,13 @@ final class TypingManager: NSObject, ObservableObject {
     @Published var isThinking: Bool = false
     @Published var lastCompletionDate: Date?
     @Published var lastRunDuration: TimeInterval?
+    @Published var lastTypingPhaseDuration: TimeInterval?
+    @Published var lastEditingPhaseDuration: TimeInterval?
     @Published var progressFraction: Double = 0.0  // 0.0 = not started, 1.0 = complete
-    
+
     private var countdownTimer: Timer?
     private var typingStartDate: Date?
+    private var editingStartDate: Date?
     
     // Typing state
     private var textToType: [Character] = []
@@ -85,6 +90,7 @@ final class TypingManager: NSObject, ObservableObject {
     private var currentEditIndex: Int = 0                // Current edit being executed
     private var actualCursorPosition: Int = 0            // Actual cursor position in the modified text
     private var customEditingDuration: TimeInterval?
+    private var extraDelayPerEdit: TimeInterval = 0      // Extra delay between edits for custom duration
 
     // Edit-phase character typing state (mirrors typing phase for reliability)
     private var editCharsToType: [Character] = []        // Characters being inserted during an edit
@@ -95,7 +101,7 @@ final class TypingManager: NSObject, ObservableObject {
 
     // Editing delay configuration - uses slower delays universally to work with all editors
     // including web-based editors like Google Docs
-    private var editingDelayMultiplier: Double = 5.0     // Universal speed for all editors (higher = more reliable)
+    private var editingDelayMultiplier: Double = 1.0     // Set to 1.0 to test if still needed (was 5.0 for web editor reliability)
 
     // Periodic focus checker (safety net for missed window switches)
     private var focusCheckTimer: Timer?
@@ -234,6 +240,10 @@ final class TypingManager: NSObject, ObservableObject {
         targetAppPID = nil
         targetWindowTitle = nil
         lastCompletionDate = nil
+        lastTypingPhaseDuration = nil
+        lastEditingPhaseDuration = nil
+        editingStartDate = nil
+        extraDelayPerEdit = 0
         progressFraction = 0.0
     }
     
@@ -341,8 +351,17 @@ final class TypingManager: NSObject, ObservableObject {
 
         stopPeriodicFocusCheck()
 
+        // Record typing phase duration
+        var typingDuration: TimeInterval?
+        if let start = typingStartDate {
+            typingDuration = Date().timeIntervalSince(start)
+        }
+
         // Check if we need to transition to editing phase
         if let draft2 = draft2Text, !draft2.isEmpty {
+            // Store typing phase duration for later reporting
+            self.lastTypingPhaseDuration = typingDuration
+
             // Convert textToType back to string for draft1
             let draft1 = String(textToType)
 
@@ -498,25 +517,28 @@ final class TypingManager: NSObject, ObservableObject {
 
         // Check every 0.5 seconds
         focusCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
+            // Dispatch to main actor to safely access @MainActor-isolated state
+            DispatchQueue.main.async {
+                guard let self = self else { return }
 
-            // Only check during active typing/editing states
-            guard self.state == .typing || self.state == .editing else {
-                return
-            }
+                // Only check during active typing/editing states
+                guard self.state == .typing || self.state == .editing else {
+                    return
+                }
 
-            // Check if we're still in the target window
-            if !self.isTargetWindowFocused() {
-                let currentWindow = self.getFocusedWindowTitle()
-                print("DEBUG: Periodic check detected window switch - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
+                // Check if we're still in the target window
+                if !self.isTargetWindowFocused() {
+                    let currentWindow = self.getFocusedWindowTitle()
+                    print("DEBUG: Periodic check detected window switch - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
 
-                // Pause based on current state
-                if self.state == .typing {
-                    print("DEBUG: Auto-pausing typing")
-                    self.pauseTyping()
-                } else if self.state == .editing {
-                    print("DEBUG: Auto-pausing editing")
-                    self.pauseEditing()
+                    // Pause based on current state
+                    if self.state == .typing {
+                        print("DEBUG: Auto-pausing typing")
+                        self.pauseTyping()
+                    } else if self.state == .editing {
+                        print("DEBUG: Auto-pausing editing")
+                        self.pauseEditing()
+                    }
                 }
             }
         }
@@ -961,6 +983,79 @@ final class TypingManager: NSObject, ObservableObject {
         keyUp.post(tap: .cghidEventTap)
     }
 
+    // MARK: - Editing Time Estimation
+
+    /// Estimates the editing time for transforming draft1 into draft2 at the given WPM
+    /// This can be called before starting to provide a preview estimate
+    func estimateEditingTime(draft1: String, draft2: String, wpm: Int) -> TimeInterval {
+        // If drafts are identical, no editing needed
+        if draft1 == draft2 {
+            return 0
+        }
+
+        // Compute the edit operations
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2)
+
+        if edits.isEmpty {
+            return 0
+        }
+
+        // Calculate delays based on WPM (same logic as in startTyping)
+        let charsPerMinute = max(5.0, Double(wpm) * 5.0)
+        let baseInterCharDelay = 60.0 / charsPerMinute
+        let delayMultiplier = editingDelayMultiplier
+
+        let navigationDelay = 0.08 * delayMultiplier
+        let postNavigationDelay = 0.3 * delayMultiplier
+        let deleteDelay = 0.1 * delayMultiplier
+        let postDeleteDelay = 0.3 * delayMultiplier
+        let postInsertDelay = 0.3 * delayMultiplier
+        let baseCharDelay = max(0.05, baseInterCharDelay) * delayMultiplier
+
+        var totalTime: TimeInterval = 0
+        var simulatedCursorPos = draft1.count // Start at end of draft1
+
+        for edit in edits {
+            // Navigation time
+            let moveDistance = simulatedCursorPos - edit.position
+            if moveDistance > 0 {
+                totalTime += Double(moveDistance) * navigationDelay
+                totalTime += postNavigationDelay
+            }
+
+            // Operation time
+            switch edit.operation {
+            case .delete(let count):
+                totalTime += Double(count) * deleteDelay
+                totalTime += postDeleteDelay
+                simulatedCursorPos = edit.position
+
+            case .insert(let text):
+                // Estimate typing time with jitter (similar to typing phase)
+                let charCount = text.count
+                totalTime += Double(charCount) * baseCharDelay * 1.5 // 1.5x for jitter
+                totalTime += postInsertDelay
+                simulatedCursorPos = edit.position + text.count
+
+            case .replace(let oldCount, let newText):
+                totalTime += Double(oldCount) * deleteDelay
+                totalTime += postDeleteDelay
+                let charCount = newText.count
+                totalTime += Double(charCount) * baseCharDelay * 1.5
+                totalTime += postInsertDelay
+                simulatedCursorPos = edit.position + newText.count
+
+            default:
+                break
+            }
+        }
+
+        // Add initial pause before editing starts (simulates "reviewing Draft 1")
+        totalTime += 1.0
+
+        return totalTime
+    }
+
     // MARK: - Two-Phase Editing Mode
 
     func startTwoPhaseTyping(
@@ -996,6 +1091,7 @@ final class TypingManager: NSObject, ObservableObject {
         }
 
         draft2Text = draft2
+        editingStartDate = Date()
 
         print("DEBUG TypingManager: Starting backwards editing")
         print("  Draft 1 length: \(draft1.count)")
@@ -1012,6 +1108,21 @@ final class TypingManager: NSObject, ObservableObject {
         isThinking = false
         currentEditIndex = 0
         actualCursorPosition = draft1.count // Cursor starts at end of draft1
+        extraDelayPerEdit = 0
+
+        // Step 3: Calculate extra delay per edit if custom duration is specified
+        if let targetDuration = customDuration, targetDuration > 0, !positionedEdits.isEmpty {
+            let naturalEditingTime = estimateNaturalEditingTime()
+            let extraBudget = max(0, targetDuration - naturalEditingTime)
+
+            if extraBudget > 0 {
+                // Distribute extra time across all edit operations
+                extraDelayPerEdit = extraBudget / Double(positionedEdits.count)
+                print("DEBUG: Custom editing duration requested: \(targetDuration)s")
+                print("DEBUG: Natural editing time estimate: \(naturalEditingTime)s")
+                print("DEBUG: Extra delay per edit: \(extraDelayPerEdit)s")
+            }
+        }
 
         // Start periodic focus check for editing phase
         startPeriodicFocusCheck()
@@ -1020,6 +1131,56 @@ final class TypingManager: NSObject, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.executeNextEditBackwards()
         }
+    }
+
+    /// Estimates the natural editing time based on operations count and complexity
+    private func estimateNaturalEditingTime() -> TimeInterval {
+        var totalTime: TimeInterval = 0
+        let navigationDelay = 0.08 * editingDelayMultiplier
+        let postNavigationDelay = 0.3 * editingDelayMultiplier
+        let deleteDelay = 0.1 * editingDelayMultiplier
+        let postDeleteDelay = 0.3 * editingDelayMultiplier
+        let postInsertDelay = 0.3 * editingDelayMultiplier
+        let baseCharDelay = max(0.05, interCharacterDelay) * editingDelayMultiplier
+
+        var simulatedCursorPos = textToType.count // Start at end of draft1
+
+        for edit in positionedEdits {
+            // Navigation time
+            let moveDistance = simulatedCursorPos - edit.position
+            if moveDistance > 0 {
+                totalTime += Double(moveDistance) * navigationDelay
+                totalTime += postNavigationDelay
+            }
+
+            // Operation time
+            switch edit.operation {
+            case .delete(let count):
+                totalTime += Double(count) * deleteDelay
+                totalTime += postDeleteDelay
+                simulatedCursorPos = edit.position
+
+            case .insert(let text):
+                // Estimate typing time with jitter (similar to typing phase)
+                let charCount = text.count
+                totalTime += Double(charCount) * baseCharDelay * 1.5 // 1.5x for jitter
+                totalTime += postInsertDelay
+                simulatedCursorPos = edit.position + text.count
+
+            case .replace(let oldCount, let newText):
+                totalTime += Double(oldCount) * deleteDelay
+                totalTime += postDeleteDelay
+                let charCount = newText.count
+                totalTime += Double(charCount) * baseCharDelay * 1.5
+                totalTime += postInsertDelay
+                simulatedCursorPos = edit.position + newText.count
+
+            default:
+                break
+            }
+        }
+
+        return totalTime
     }
 
     /// Executes edits sequentially using backwards editing (right-to-left)
@@ -1207,8 +1368,22 @@ final class TypingManager: NSObject, ObservableObject {
             self.progressFraction = 0.5 + (progress * 0.5)
         }
 
-        // Move to next edit
-        executeNextEditBackwards()
+        // Apply extra delay for custom editing duration, then move to next edit
+        if extraDelayPerEdit > 0 {
+            // Show thinking indicator during extra delay
+            DispatchQueue.main.async {
+                self.isThinking = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + extraDelayPerEdit) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                DispatchQueue.main.async {
+                    self.isThinking = false
+                }
+                self.executeNextEditBackwards()
+            }
+        } else {
+            executeNextEditBackwards()
+        }
     }
 
     private func sendKeysWithDelay(count: Int, delay: TimeInterval, keyAction: @escaping () -> Void, completion: @escaping () -> Void) {
@@ -1355,9 +1530,16 @@ final class TypingManager: NSObject, ObservableObject {
         stopPeriodicFocusCheck()
 
         DispatchQueue.main.async {
+            // Record editing phase duration
+            if let editStart = self.editingStartDate {
+                self.lastEditingPhaseDuration = Date().timeIntervalSince(editStart)
+            }
+
+            // Total run duration (typing + editing)
             if let start = self.typingStartDate {
                 self.lastRunDuration = Date().timeIntervalSince(start)
             }
+
             self.progressFraction = 1.0
             self.state = .idle
             self.lastCompletionDate = Date()
@@ -1365,6 +1547,7 @@ final class TypingManager: NSObject, ObservableObject {
             self.isThinking = false
             self.targetAppPID = nil
             self.targetWindowTitle = nil
+            self.editingStartDate = nil
 
             // Clear editing state
             self.draft2Text = nil
@@ -1372,6 +1555,7 @@ final class TypingManager: NSObject, ObservableObject {
             self.currentEditIndex = 0
             self.actualCursorPosition = 0
             self.customEditingDuration = nil
+            self.extraDelayPerEdit = 0
         }
     }
 
@@ -1399,6 +1583,7 @@ final class TypingManager: NSObject, ObservableObject {
             self.currentEditIndex = 0
             self.actualCursorPosition = 0
             self.customEditingDuration = nil
+            self.extraDelayPerEdit = 0
         }
     }
 

@@ -42,7 +42,6 @@ struct ContentView: View {
 
     // Two-draft editing mode
     @State private var inputTextDraft2: String = ""
-    @State private var useEditingMode: Bool = false
     @State private var customEditingDuration: Bool = false
     @State private var editingDurationValue: String = ""
     @State private var editingDurationUnit: DurationUnit = .minutes
@@ -55,6 +54,22 @@ struct ContentView: View {
 
     private var isOverlayVisible: Bool {
         typingManager.state != .idle || typingManager.lastCompletionDate != nil
+    }
+
+    private var hasSecondDraft: Bool {
+        !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var estimatedEditingTime: TimeInterval? {
+        guard hasSecondDraft,
+              !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return typingManager.estimateEditingTime(
+            draft1: inputText,
+            draft2: inputTextDraft2,
+            wpm: Int(targetWPM)
+        )
     }
 
     var body: some View {
@@ -78,94 +93,66 @@ struct ContentView: View {
                 }
 
                 HStack(alignment: .top, spacing: 16) {
-                    // Conditional layout: Single draft vs Two drafts
-                    if useEditingMode {
-                        // Two-draft mode: Side-by-side editors
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Draft 1 (Starting Point)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                    // Two-draft layout: Side-by-side editors
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Draft 1")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
 
-                                ZStack(alignment: .topLeading) {
-                                    TextEditor(text: $inputText)
-                                        .focused($isInputFocused)
-                                        .padding(8)
-                                        .scrollIndicators(.hidden)
+                            ZStack(alignment: .topLeading) {
+                                TextEditor(text: $inputText)
+                                    .focused($isInputFocused)
+                                    .padding(8)
+                                    .scrollIndicators(.hidden)
 
-                                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                        Text("Paste your first draft here.")
-                                            .foregroundColor(.secondary)
-                                            .padding(.top, 14)
-                                            .padding(.leading, 12)
-                                    }
+                                if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Paste your text here.")
+                                        .foregroundColor(.secondary)
+                                        .padding(.top, 14)
+                                        .padding(.leading, 12)
                                 }
-                                .frame(minHeight: 260)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color(NSColor.textBackgroundColor))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color.secondary.opacity(0.3))
-                                )
                             }
+                            .frame(minHeight: 260)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(NSColor.textBackgroundColor))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.secondary.opacity(0.3))
+                            )
+                        }
 
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Draft 2 (Final Version)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Draft 2 (optional)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
 
-                                ZStack(alignment: .topLeading) {
-                                    TextEditor(text: $inputTextDraft2)
-                                        .padding(8)
-                                        .scrollIndicators(.hidden)
+                            ZStack(alignment: .topLeading) {
+                                TextEditor(text: $inputTextDraft2)
+                                    .padding(8)
+                                    .scrollIndicators(.hidden)
 
-                                    if inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                        Text("Paste your final draft here (optional).")
-                                            .foregroundColor(.secondary)
-                                            .padding(.top, 14)
-                                            .padding(.leading, 12)
-                                    }
+                                if inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Leave empty to just type, or paste a revised version to simulate editing.")
+                                        .foregroundColor(.secondary)
+                                        .padding(.top, 14)
+                                        .padding(.leading, 12)
                                 }
-                                .frame(minHeight: 260)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color(NSColor.textBackgroundColor))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color.secondary.opacity(0.3))
-                                )
                             }
+                            .frame(minHeight: 260)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(NSColor.textBackgroundColor))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.secondary.opacity(0.3))
+                            )
                         }
-                    } else {
-                        // Single-draft mode (current behavior)
-                        ZStack(alignment: .topLeading) {
-                            TextEditor(text: $inputText)
-                                .focused($isInputFocused)
-                                .padding(8)
-                                .scrollIndicators(.hidden)
-
-                            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text("Paste the text you'd like to type here.")
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 14)
-                                    .padding(.leading, 12)
-                            }
-                        }
-                        .frame(minHeight: 260)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(NSColor.textBackgroundColor))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.secondary.opacity(0.3))
-                        )
                     }
 
                     // Right: settings column
@@ -261,23 +248,27 @@ struct ContentView: View {
                 )
                 .layoutPriority(1)
 
-                        // Two-draft editing mode card
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(alignment: .center, spacing: 8) {
-                                Toggle("Enable", isOn: $useEditingMode)
-                                    .font(.subheadline)
-
-                                Text("Editing Mode")
+                        // Editing options card (shown when draft 2 has content)
+                        if hasSecondDraft {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("􁚝 Editing Phase")
                                     .font(.headline)
                                     .bold()
 
-                                Spacer()
-                            }
-
-                            if useEditingMode {
-                                Text("Type Draft 1, then edit it into Draft 2")
+                                Text("The app will type draft 1, then edit it to match draft 2.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+
+                                if let editTime = estimatedEditingTime {
+                                    HStack(spacing: 4) {
+                                        Text("Estimated editing time:")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                        Text("~\(formatDuration(editTime))")
+                                            .font(.subheadline)
+                                            .bold()
+                                    }
+                                }
 
                                 Toggle("Custom Editing Duration", isOn: $customEditingDuration)
                                     .font(.subheadline)
@@ -303,16 +294,15 @@ struct ContentView: View {
                                         .frame(maxWidth: .infinity)
                                     }
                                 }
-
                             }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.08))
+                            )
+                            .layoutPriority(1)
                         }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
-                        )
-                        .layoutPriority(1)
 
                         HStack {
                             Spacer()
@@ -332,8 +322,8 @@ struct ContentView: View {
             }
             .padding()
             .frame(
-                minWidth: isOverlayVisible ? compactOverlayWidth : (useEditingMode ? 1000 : 750),
-                minHeight: useEditingMode ? 700 : 600
+                minWidth: isOverlayVisible ? compactOverlayWidth : 1000,
+                minHeight: 700
             )
             .allowsHitTesting(!isOverlayVisible)
 
@@ -547,12 +537,6 @@ struct ContentView: View {
                 }
             }
         }
-        .onChange(of: useEditingMode) { _, _ in
-            // When toggling editing mode, reposition window to stay on screen
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                adjustWindowPositionForEditingMode()
-            }
-        }
         .onChange(of: typingManager.progressText) { _, newText in
             if newText.contains("aborted due to verification failure") {
                 editingErrorMessage = """
@@ -574,7 +558,7 @@ struct ContentView: View {
             }
 
             Button("Confirm") {
-                if useEditingMode && !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if hasSecondDraft {
                     // Two-phase mode: type Draft 1, then edit to Draft 2
                     typingManager.startTwoPhaseTyping(
                         draft1: inputText,
@@ -597,7 +581,7 @@ struct ContentView: View {
                 }
             }
         } message: {
-            if useEditingMode && !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if hasSecondDraft {
                 Text("""
 You'll have 10 seconds to switch windows.
 Phase 1: Type Draft 1 completely
@@ -643,7 +627,7 @@ To pause, press ESC or switch apps.
                 return "Preparing to start…"
             }
         case .typing:
-            let phaseIndicator = useEditingMode && !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let phaseIndicator = hasSecondDraft
                 ? "Phase 1: " : ""
             return typingManager.isThinking
                 ? "\(phaseIndicator)🤔 Thinking 🤔"
@@ -732,18 +716,30 @@ To pause, press ESC or switch apps.
 
         let timeString = formatter.string(from: completionDate)
 
-        if let duration = typingManager.lastRunDuration {
-            let totalSeconds = Int(duration.rounded())
-            let minutes = totalSeconds / 60
-            let seconds = totalSeconds % 60
-
-            if minutes > 0 {
-                return "Completed at \(timeString) after running for \(minutes) minute(s) and \(seconds) second(s)."
-            } else {
-                return "Completed at \(timeString) after running for \(seconds) second(s)."
-            }
+        // Check if we have separate phase durations (two-phase mode)
+        if let typingDuration = typingManager.lastTypingPhaseDuration,
+           let editingDuration = typingManager.lastEditingPhaseDuration {
+            let typingStr = formatDuration(typingDuration)
+            let editingStr = formatDuration(editingDuration)
+            let totalStr = formatDuration(typingDuration + editingDuration)
+            return "Completed at \(timeString)\nTyping: \(typingStr) | Editing: \(editingStr) | Total: \(totalStr)"
+        } else if let duration = typingManager.lastRunDuration {
+            let durationStr = formatDuration(duration)
+            return "Completed at \(timeString) after \(durationStr)."
         } else {
             return "Completed at \(timeString)"
+        }
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = Int(duration.rounded())
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        } else {
+            return "\(seconds)s"
         }
     }
 
