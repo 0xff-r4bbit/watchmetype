@@ -106,6 +106,9 @@ final class TypingManager: NSObject, ObservableObject {
     // Periodic focus checker (safety net for missed window switches)
     private var focusCheckTimer: Timer?
 
+    // Tracks which state we were in before pausing (to resume correctly)
+    private var stateBeforePause: TypingState?
+
     override init() {
         super.init()
         
@@ -151,6 +154,7 @@ final class TypingManager: NSObject, ObservableObject {
         extraDelayPerParagraphBreak = 0
         isThinking = false
         targetAppPID = nil
+        stateBeforePause = nil
         typingStartDate = nil
         lastRunDuration = nil
         progressFraction = 0.0
@@ -239,6 +243,7 @@ final class TypingManager: NSObject, ObservableObject {
         isThinking = false
         targetAppPID = nil
         targetWindowTitle = nil
+        stateBeforePause = nil
         lastCompletionDate = nil
         lastTypingPhaseDuration = nil
         lastEditingPhaseDuration = nil
@@ -261,10 +266,11 @@ final class TypingManager: NSObject, ObservableObject {
 
         // At the moment typing begins, record the current frontmost app and window
         // as the intended typing target.
-        targetAppPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let frontmostApp = NSWorkspace.shared.frontmostApplication
+        targetAppPID = frontmostApp?.processIdentifier
         targetWindowTitle = getFocusedWindowTitle()
 
-        print("DEBUG: Starting typing in window: '\(targetWindowTitle ?? "unknown")'")
+        print("DEBUG: Target app recorded - PID: \(targetAppPID ?? 0), name: '\(frontmostApp?.localizedName ?? "unknown")', window: '\(targetWindowTitle ?? "unknown")'")
 
         state = .typing
         progressText = "Typing in progress…"
@@ -420,21 +426,22 @@ final class TypingManager: NSObject, ObservableObject {
                     self.pauseTyping()
                 }
             case .editing:
-                // If we leave the target window during editing, pause
+                // If we leave the target window during editing, stop completely
                 if !isTargetFocused {
-                    print("DEBUG: Leaving target window, pausing editing")
-                    self.pauseEditing()
+                    print("DEBUG: Leaving target window, stopping editing")
+                    self.stopTyping()
                 }
             case .paused:
                 // If we come back to the target window, resume
                 if isTargetFocused {
                     print("DEBUG: Returned to target window, resuming")
-                    // Determine whether to resume typing or editing
-                    if self.draft2Text != nil {
+                    // Use tracked state to determine whether to resume typing or editing
+                    if self.stateBeforePause == .editing {
                         self.resumeEditing()
                     } else {
                         self.resumeTyping()
                     }
+                    self.stateBeforePause = nil
                 }
             default:
                 break
@@ -445,6 +452,9 @@ final class TypingManager: NSObject, ObservableObject {
     private func pauseTyping() {
         guard state == .typing else { return }
 
+        // Record what state we're pausing from (for correct resume)
+        stateBeforePause = .typing
+
         typingWorkItem?.cancel()
         typingWorkItem = nil
 
@@ -453,7 +463,7 @@ final class TypingManager: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.state = .paused
             self.isThinking = false
-            self.progressText = "Press Resume to continue typing."
+            self.progressText = "Paused. Switch back to your document to resume."
         }
     }
 
@@ -473,40 +483,6 @@ final class TypingManager: NSObject, ObservableObject {
         scheduleNextCharacter(after: interCharacterDelay)
     }
 
-    // Resume with a short countdown (for user-initiated Resume)
-    func resumeWithCountdown(_ seconds: Int = 5) {
-        guard state == .paused else { return }
-
-        // Determine what we're resuming from
-        let isResumingEditing = draft2Text != nil
-
-        countdownTimer?.invalidate()
-        countdownRemaining = seconds
-        state = .countingDown
-        progressText = "Resuming in \(seconds) seconds… Switch back to your document."
-
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            guard let self = self else {
-                timer.invalidate()
-                return
-            }
-
-            DispatchQueue.main.async {
-                if self.countdownRemaining > 0 {
-                    self.countdownRemaining -= 1
-                    self.progressText = "Resuming in \(self.countdownRemaining) seconds… Switch back to your document."
-                } else {
-                    timer.invalidate()
-                    if isResumingEditing {
-                        self.resumeEditing()
-                    } else {
-                        self.beginTypingLoop()
-                    }
-                }
-            }
-        }
-    }
-    
     // MARK: - Periodic Focus Checking
 
     /// Starts a timer to periodically check if we're still in the target window
@@ -531,13 +507,13 @@ final class TypingManager: NSObject, ObservableObject {
                     let currentWindow = self.getFocusedWindowTitle()
                     print("DEBUG: Periodic check detected window switch - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
 
-                    // Pause based on current state
+                    // Pause typing, stop editing
                     if self.state == .typing {
                         print("DEBUG: Auto-pausing typing")
                         self.pauseTyping()
                     } else if self.state == .editing {
-                        print("DEBUG: Auto-pausing editing")
-                        self.pauseEditing()
+                        print("DEBUG: Auto-stopping editing (window switch)")
+                        self.stopTyping()
                     }
                 }
             }
@@ -580,29 +556,43 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     private func isTargetWindowFocused() -> Bool {
-        guard let targetTitle = targetWindowTitle, let targetPID = targetAppPID else {
-            // If we don't have a recorded target, allow typing
+        // Must have at least the target app PID to do any checking
+        guard let targetPID = targetAppPID else {
+            // If we don't have a recorded target app, allow typing
+            print("DEBUG: No target app recorded, allowing typing")
             return true
         }
 
-        // Check if the frontmost app matches (quick check)
+        // Check if the frontmost app matches
         guard let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+            print("DEBUG: Can't get frontmost app PID - pausing")
             return false
         }
 
         // If app doesn't match, definitely not the right window
         if frontmostPID != targetPID {
+            print("DEBUG: App PID mismatch - target: \(targetPID), current: \(frontmostPID)")
             return false
         }
 
-        // App matches, now check specific window
-        guard let currentWindowTitle = getFocusedWindowTitle() else {
-            // Can't determine window title - assume it's okay to continue
-            return true
+        // App matches - if we also have a target window title, verify it too
+        if let targetTitle = targetWindowTitle {
+            guard let currentWindowTitle = getFocusedWindowTitle() else {
+                // Can't determine current window title but app matches
+                // Be conservative and assume wrong window
+                print("DEBUG: Can't get current window title, being conservative")
+                return false
+            }
+
+            // Compare window titles
+            if currentWindowTitle != targetTitle {
+                print("DEBUG: Window title mismatch - target: '\(targetTitle)', current: '\(currentWindowTitle)'")
+                return false
+            }
         }
 
-        // Compare window titles
-        return currentWindowTitle == targetTitle
+        // App matches (and window title matches if we had one)
+        return true
     }
     
     
@@ -1031,17 +1021,22 @@ final class TypingManager: NSObject, ObservableObject {
                 simulatedCursorPos = edit.position
 
             case .insert(let text):
-                // Estimate typing time with jitter (similar to typing phase)
+                // Base typing time
                 let charCount = text.count
-                totalTime += Double(charCount) * baseCharDelay * 1.5 // 1.5x for jitter
+                totalTime += Double(charCount) * baseCharDelay
+                // Add estimated jitter based on actual text content
+                totalTime += estimateTextJitter(text) * delayMultiplier
                 totalTime += postInsertDelay
                 simulatedCursorPos = edit.position + text.count
 
             case .replace(let oldCount, let newText):
                 totalTime += Double(oldCount) * deleteDelay
                 totalTime += postDeleteDelay
+                // Base typing time
                 let charCount = newText.count
-                totalTime += Double(charCount) * baseCharDelay * 1.5
+                totalTime += Double(charCount) * baseCharDelay
+                // Add estimated jitter based on actual text content
+                totalTime += estimateTextJitter(newText) * delayMultiplier
                 totalTime += postInsertDelay
                 simulatedCursorPos = edit.position + newText.count
 
@@ -1133,6 +1128,51 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
+    /// Estimates the jitter time for typing a given text string
+    /// This mirrors the extraDelay(afterTyping:) logic to provide accurate estimates
+    private func estimateTextJitter(_ text: String) -> TimeInterval {
+        guard !text.isEmpty else { return 0 }
+
+        var totalJitter: TimeInterval = 0
+        let chars = Array(text)
+        var wordCount = 0
+        var wordsUntilPause = 4 // Average of 3-5
+
+        for i in 0..<chars.count {
+            let char = chars[i]
+            let prevChar: Character? = i > 0 ? chars[i - 1] : nil
+
+            // Word boundary pauses (every 3-5 words, average 1.5s)
+            if char.isWhitespace {
+                if let prev = prevChar, !prev.isWhitespace {
+                    wordCount += 1
+                    if wordCount >= wordsUntilPause {
+                        totalJitter += 1.5 // Average of 1.0-2.0
+                        wordCount = 0
+                        wordsUntilPause = 4 // Reset to average
+                    }
+                }
+            }
+
+            // Comma pause (average 1.5s)
+            if char == "," {
+                totalJitter += 1.5
+            }
+
+            // Sentence-ending punctuation (average 7.5s)
+            if ".?!;:".contains(char) {
+                totalJitter += 7.5
+            }
+
+            // Paragraph break - double newline (average 9s)
+            if char == "\n", let prev = prevChar, prev == "\n" {
+                totalJitter += 9.0
+            }
+        }
+
+        return totalJitter
+    }
+
     /// Estimates the natural editing time based on operations count and complexity
     private func estimateNaturalEditingTime() -> TimeInterval {
         var totalTime: TimeInterval = 0
@@ -1161,17 +1201,22 @@ final class TypingManager: NSObject, ObservableObject {
                 simulatedCursorPos = edit.position
 
             case .insert(let text):
-                // Estimate typing time with jitter (similar to typing phase)
+                // Base typing time
                 let charCount = text.count
-                totalTime += Double(charCount) * baseCharDelay * 1.5 // 1.5x for jitter
+                totalTime += Double(charCount) * baseCharDelay
+                // Add estimated jitter based on actual text content
+                totalTime += estimateTextJitter(text) * editingDelayMultiplier
                 totalTime += postInsertDelay
                 simulatedCursorPos = edit.position + text.count
 
             case .replace(let oldCount, let newText):
                 totalTime += Double(oldCount) * deleteDelay
                 totalTime += postDeleteDelay
+                // Base typing time
                 let charCount = newText.count
-                totalTime += Double(charCount) * baseCharDelay * 1.5
+                totalTime += Double(charCount) * baseCharDelay
+                // Add estimated jitter based on actual text content
+                totalTime += estimateTextJitter(newText) * editingDelayMultiplier
                 totalTime += postInsertDelay
                 simulatedCursorPos = edit.position + newText.count
 
@@ -1496,6 +1541,9 @@ final class TypingManager: NSObject, ObservableObject {
     private func pauseEditing() {
         guard state == .editing else { return }
 
+        // Record what state we're pausing from (for correct resume)
+        stateBeforePause = .editing
+
         typingWorkItem?.cancel()
         typingWorkItem = nil
 
@@ -1504,7 +1552,7 @@ final class TypingManager: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.state = .paused
             self.isThinking = false
-            self.progressText = "Press Resume to continue editing."
+            self.progressText = "Paused. Switch back to your document to resume."
         }
     }
 
@@ -1587,8 +1635,9 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Esc key handling
+    // MARK: - ESC Key Handling
 
+    /// Sets up an event tap to detect ESC key presses
     private func setupEscEventTap() {
         let mask = (1 << CGEventType.keyDown.rawValue)
 
@@ -1598,7 +1647,7 @@ final class TypingManager: NSObject, ObservableObject {
             }
 
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            // 53 is the keycode for Esc on macOS.
+            // 53 is the keycode for ESC on macOS
             if keycode == 53,
                let userInfo = userInfo {
                 let manager = Unmanaged<TypingManager>.fromOpaque(userInfo).takeUnretainedValue()
@@ -1633,11 +1682,13 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     private func handleEscPressed() {
-        // Pause during typing or editing
+        // During typing: pause (can resume)
+        // During editing: stop completely
         if state == .typing {
             pauseTyping()
         } else if state == .editing {
-            pauseEditing()
+            // Stop editing completely - no resume option
+            stopTyping()
         }
     }
 }

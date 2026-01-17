@@ -176,12 +176,11 @@ struct ContentView: View {
                             .padding(.top, 4)
                         }
                         .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Color.secondary.opacity(0.08))
                         )
-                        .layoutPriority(1)
 
                         // Typing speed card
                         VStack(alignment: .leading, spacing: 12) {
@@ -240,13 +239,12 @@ struct ContentView: View {
                                 }
                             }
                         }
-                .padding(12)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.secondary.opacity(0.08))
-                )
-                .layoutPriority(1)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.secondary.opacity(0.08))
+                        )
 
                         // Editing options card (shown when draft 2 has content)
                         if hasSecondDraft {
@@ -259,49 +257,44 @@ struct ContentView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
-                                if let editTime = estimatedEditingTime {
-                                    HStack(spacing: 4) {
-                                        Text("Estimated editing time:")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                        Text("~\(formatDuration(editTime))")
-                                            .font(.subheadline)
-                                            .bold()
-                                    }
-                                }
-
                                 Toggle("Custom Editing Duration", isOn: $customEditingDuration)
                                     .font(.subheadline)
                                     .padding(.top, 4)
 
-                                if customEditingDuration {
-                                    HStack(alignment: .center, spacing: 8) {
-                                        Text("edit for at least")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                            .padding(.vertical, 4)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if customEditingDuration {
+                                        HStack(alignment: .center, spacing: 8) {
+                                            Text("edit for at least")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .padding(.vertical, 4)
 
-                                        TextField("e.g. 5", text: $editingDurationValue)
-                                            .textFieldStyle(.roundedBorder)
-                                            .frame(width: 60)
+                                            TextField("e.g. 5", text: $editingDurationValue)
+                                                .textFieldStyle(.roundedBorder)
+                                                .frame(width: 60)
 
-                                        Picker("", selection: $editingDurationUnit) {
-                                            ForEach(DurationUnit.allCases) { unit in
-                                                Text(unit.displayName).tag(unit)
+                                            Picker("", selection: $editingDurationUnit) {
+                                                ForEach(DurationUnit.allCases) { unit in
+                                                    Text(unit.displayName).tag(unit)
+                                                }
                                             }
+                                            .pickerStyle(.segmented)
+                                            .frame(maxWidth: .infinity)
                                         }
-                                        .pickerStyle(.segmented)
-                                        .frame(maxWidth: .infinity)
+                                    } else {
+                                        estimatedEditingText
+                                            .font(.subheadline)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .padding(.vertical, 4)
                                     }
                                 }
                             }
                             .padding(12)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                             .background(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(Color.secondary.opacity(0.08))
                             )
-                            .layoutPriority(1)
                         }
 
                         HStack {
@@ -312,7 +305,7 @@ struct ContentView: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
-                        .padding(.top, 8)
+                        .padding(.top, 4)
                     }
                     .frame(width: 320, alignment: .topLeading)
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -487,23 +480,10 @@ struct ContentView: View {
                             .padding(.horizontal)
                         }
 
-                        if typingManager.state == .paused {
-                            HStack(spacing: 16) {
-                                Button("Resume") {
-                                    typingManager.resumeWithCountdown()
-                                }
-
-                                Button("Stop") {
-                                    typingManager.stopTyping()
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                        } else {
-                            Button("Stop") {
-                                typingManager.stopTyping()
-                            }
-                            .buttonStyle(.borderedProminent)
+                        Button("Stop") {
+                            typingManager.stopTyping()
                         }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
                 .padding()
@@ -584,14 +564,13 @@ struct ContentView: View {
             if hasSecondDraft {
                 Text("""
 You'll have 10 seconds to switch windows.
-Phase 1: Type Draft 1 completely
-Phase 2: Edit Draft 1 into Draft 2
-Press ESC to pause.
+Phase 1: Type Draft 1 (ESC or switch window to pause, switch back to resume)
+Phase 2: Edit Draft 1 into Draft 2 (ESC or switch window to stop)
 """)
             } else {
                 Text("""
 You'll have 10 seconds to switch to the window where the text will go.
-To pause, press ESC or switch apps.
+ESC or switch windows to pause. Switch back to resume.
 """)
             }
         }
@@ -641,23 +620,36 @@ To pause, press ESC or switch apps.
 
     private var estimatedTimeText: Text {
         guard let minutes = estimatedMinutes else {
-            return Text("Est. at least —.")
+            return Text("Estimated: at least —")
                 .foregroundColor(.secondary)
         }
-
-        let unit = minutes == 1 ? "minute" : "minutes"
 
         let prefix = Text("Estimated: at least ")
             .foregroundColor(.secondary)
 
-        let number = Text("\(minutes)")
+        let number = Text("\(minutes) m")
             .bold()
             .foregroundColor(highlightEstimate ? .accentColor : .primary)
 
-        let suffix = Text(" \(unit).")
+        return prefix + number
+    }
+
+    private var estimatedEditingText: Text {
+        guard let editTime = estimatedEditingTime else {
+            return Text("Estimated: at least —")
+                .foregroundColor(.secondary)
+        }
+
+        let estimate = formatDurationInFiveMinuteIncrements(editTime)
+
+        let prefix = Text("Estimated: at least ")
             .foregroundColor(.secondary)
 
-        return prefix + number + suffix
+        let value = Text(estimate)
+            .bold()
+            .foregroundColor(highlightEstimate ? .accentColor : .primary)
+
+        return prefix + value
     }
 
     private var estimatedMinutes: Int? {
@@ -740,6 +732,27 @@ To pause, press ESC or switch apps.
             return "\(minutes)m \(seconds)s"
         } else {
             return "\(seconds)s"
+        }
+    }
+
+    /// Formats duration as minutes rounded to nearest 5-minute increment
+    /// Examples: "5m", "10m", "1h 15m"
+    private func formatDurationInFiveMinuteIncrements(_ duration: TimeInterval) -> String {
+        let totalMinutes = duration / 60.0
+
+        // Round to nearest 5 minutes, minimum 5 minutes
+        let roundedMinutes = max(5, Int((totalMinutes / 5.0).rounded()) * 5)
+
+        if roundedMinutes >= 60 {
+            let hours = roundedMinutes / 60
+            let mins = roundedMinutes % 60
+            if mins == 0 {
+                return "\(hours)h"
+            } else {
+                return "\(hours)h \(mins)m"
+            }
+        } else {
+            return "\(roundedMinutes)m"
         }
     }
 
