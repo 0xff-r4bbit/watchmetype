@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xcodebuild:*)",
       "Bash(swift -typecheck:*)",
-      "Bash(swiftc:*)"
+      "Bash(swiftc:*)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -627,7 +627,7 @@ ESC or switch windows to pause. Switch back to resume.
         let prefix = Text("Estimated: at least ")
             .foregroundColor(.secondary)
 
-        let number = Text("\(minutes) m")
+        let number = Text("\(minutes)m")
             .bold()
             .foregroundColor(highlightEstimate ? .accentColor : .primary)
 
