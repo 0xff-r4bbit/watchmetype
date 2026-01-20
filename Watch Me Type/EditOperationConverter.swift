@@ -298,19 +298,11 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
         case .delete(let oldText):
             // Group consecutive deletes and inserts into a single replace operation
             // Each logical unit (sentence or word group) produces one delete+insert pair
-            var deleteCount = oldText.count
+            // NOTE: We intentionally do NOT merge consecutive deletes anymore to keep
+            // deletion granularity human-like (avoid wiping multiple sentences at once).
+            let deleteCount = oldText.count
             var insertText = ""
             var j = i + 1
-
-            // Accumulate any additional consecutive deletes (for word-level edits)
-            while j < editScript.count {
-                if case .delete(let moreText) = editScript[j] {
-                    deleteCount += moreText.count
-                    j += 1
-                } else {
-                    break
-                }
-            }
 
             // Now accumulate any consecutive inserts immediately following
             while j < editScript.count {

@@ -46,9 +46,12 @@ struct ContentView: View {
     @State private var editingDurationValue: String = ""
     @State private var editingDurationUnit: DurationUnit = .minutes
 
+    @Environment(\.colorScheme) private var colorScheme
+
     // Error state for editing failures
     @State private var showEditingError: Bool = false
     @State private var editingErrorMessage: String = ""
+    @State private var shareLinkCopied: Bool = false
 
     @StateObject private var typingManager = TypingManager()
 
@@ -321,10 +324,16 @@ struct ContentView: View {
             .allowsHitTesting(!isOverlayVisible)
 
             if isOverlayVisible {
+                let isCompletionOverlay = typingManager.state == .idle && typingManager.lastCompletionDate != nil
+                let overlayBackground = isCompletionOverlay ? Color.white : Color.black.opacity(0.7)
+                let overlayPrimaryText = isCompletionOverlay ? Color.black : Color.white
+                let overlaySecondaryText = overlayPrimaryText.opacity(0.75)
+                let overlayTertiaryText = overlayPrimaryText.opacity(0.8)
+
                 BlurOverlay()
                     .ignoresSafeArea()
                     .overlay(
-                        Color.black.opacity(0.7)
+                        overlayBackground
                             .ignoresSafeArea()
                     )
                     // Capture pointer events across the whole window so underlying onHover doesn’t fire.
@@ -333,160 +342,161 @@ struct ContentView: View {
 
                 VStack(spacing: 12) {
                     if typingManager.state == .idle, typingManager.lastCompletionDate != nil {
-                        Text("🎉 Done! 🎉")
-                            .font(.title)
-                            .bold()
-                            .foregroundColor(.white)
+                        VStack(spacing: 12) {
+                            Text("Done")
+                                .font(.system(size: 72, weight: .bold, design: .rounded))
+                                .foregroundColor(overlayPrimaryText)
 
-                        if let subtitle = completionSubtitle {
-                            Text(subtitle)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.9))
+                            if let subtitle = completionSubtitle {
+                                Text(subtitle)
+                                    .font(.subheadline)
+                                    .foregroundColor(overlaySecondaryText)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                            }
+
+                            Spacer()
+                                .frame(height: 16)
+
+                            Text("If this helped you, please consider donating and sharing this app.")
+                                .font(.subheadline)
+                                .foregroundColor(overlayTertiaryText)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
-                        }
 
-                        // Social follow CTA + icons
-                        VStack(spacing: 16) {
-                            Text("If this helped you, please consider following me for future updates.")
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.9))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-
-                            HStack(spacing: 16) {
-                                Button {
-                                    if let url = URL(string: "https://ko-fi.com/0xffr4bbit") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    Image("socials_ko-fi")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 36, height: 36)
-                                }
-                                .hoverPointer()
-
+                            HStack(spacing: 32) {
                                 Button {
                                     if let url = URL(string: "https://buymeacoffee.com/0xff.r4bbit") {
                                         NSWorkspace.shared.open(url)
                                     }
                                 } label: {
-                                    Image("socials_buymeacoffee")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 36, height: 36)
+                                    tipIcon(
+                                        imageName: "tip_qr_buymeacoffee",
+                                        size: 200,
+                                        cornerRadius: 24
+                                    )
                                 }
+                                .buttonStyle(.plain)
                                 .hoverPointer()
 
-                                Button {
-                                    if let url = URL(string: "https://x.com/0xff_r4bbit") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    Image("socials_x")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 36, height: 36)
-                                }
-                                .hoverPointer()
-
-                                Button {
-                                    if let url = URL(string: "https://www.reddit.com/user/0xff-r4bbit/") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    Image("socials_reddit")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                }
-                                .hoverPointer()
-
-                                Button {
-                                    if let url = URL(string: "https://www.instagram.com/0xff.r4bbit/") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    Image("socials_instagram")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 36, height: 36)
-                                }
-                                .hoverPointer()
-
-                                Button {
-                                    if let url = URL(string: "https://bsky.app/profile/0xff-r4bbit.bsky.social") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    Image("socials_bluesky")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 36, height: 36)
-                                }
-                                .hoverPointer()
-
-                                Button {
-                                    if let url = URL(string: "https://mastodon.social/@0xff_r4bbit") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    Image("socials_mastodon")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 36, height: 36)
-                                }
-                                .hoverPointer()
+                                tipIcon(
+                                    imageName: "tip_qr_wechat-pay",
+                                    size: 200,
+                                    cornerRadius: 24
+                                )
                             }
-                            .buttonStyle(.plain)
+                            .padding(.vertical, 24)
                         }
                         .padding(.top, 10)
 
-                        Button("Let's go again.") {
-                            typingManager.stopTyping()
-                            restoreNormalWindowFrame()
+                        HStack(spacing: 12) {
+                            Button(shareLinkCopied ? "Link copied!" : "Share this app") {
+                                copyShareLink()
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Let's go again.") {
+                                shareLinkCopied = false
+                                typingManager.stopTyping()
+                                restoreNormalWindowFrame()
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
                         .padding(.top, 14)
-                        .buttonStyle(.borderedProminent)
                     } else {
-                        Text(statusText)
-                            .font(.title)
-                            .bold()
-                            .foregroundColor(.white)
+                        if typingManager.state == .countingDown {
+                            VStack(spacing: 10) {
+                                Text("Switch to where you want me to type.")
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundColor(overlayPrimaryText)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 10)
 
-                        if !typingManager.progressText.isEmpty {
-                            Text(typingManager.progressText)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.9))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
+                                let remaining = max(0, typingManager.countdownRemaining)
 
-                        // Show progress bar when a run is active, paused, or counting down.
-                        if typingManager.state == .typing
-                            || typingManager.state == .paused
-                            || typingManager.state == .countingDown {
+                                VStack(spacing: 6) {
+                                    Text("Starting in")
+                                        .font(.subheadline)
+                                        .foregroundColor(overlaySecondaryText)
 
-                            VStack(spacing: 6) {
+                                    Text("\(remaining)")
+                                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                                        .foregroundColor(overlayPrimaryText)
+                                }
+                                .accessibilityLabel("Starting in \(remaining) seconds")
+
+                                Spacer()
+                                    .frame(height: 16)
+
+                                ProgressView()
+                                    .progressViewStyle(.linear)
+                                    .frame(maxWidth: 280)
+                                    .opacity(0.7)
+                                    .padding(.horizontal)
+
+                                Text(" ")
+                                    .font(.caption)
+                                    .opacity(0)
+                            }
+                        } else {
+                            let showProgressSection = typingManager.state == .typing
+                                || typingManager.state == .paused
+
+                            VStack(spacing: 10) {
+                                if let instruction = overlayPrimaryInstruction {
+                                    Text(instruction)
+                                        .font(.title2)
+                                        .bold()
+                                        .foregroundColor(overlayPrimaryText)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.85)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal)
+                                        .padding(.bottom, 10)
+                                }
+
+                                if let label = overlayPhaseLabel {
+                                    Text(label)
+                                        .font(.subheadline)
+                                        .foregroundColor(overlaySecondaryText)
+                                }
+
+                                Text(statusText)
+                                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                                    .foregroundColor(overlayPrimaryText)
+
+                                Spacer()
+                                    .frame(height: 16)
+
                                 ProgressView(value: typingManager.progressFraction)
                                     .progressViewStyle(.linear)
-                                    .frame(maxWidth: 320)
+                                    .frame(maxWidth: 280)
+                                    .opacity(showProgressSection ? 0.7 : 0)
+                                    .padding(.horizontal)
+                                    .accessibilityHidden(!showProgressSection)
+                                    .allowsHitTesting(showProgressSection)
 
                                 Text("\(Int(typingManager.progressFraction * 100))% complete")
                                     .font(.caption)
-                                    .foregroundColor(.white.opacity(0.9))
+                                    .foregroundColor(overlaySecondaryText)
+                                    .opacity(showProgressSection ? 1 : 0)
+                                    .accessibilityHidden(!showProgressSection)
                             }
-                            .padding(.horizontal)
                         }
 
-                        Button("Stop") {
+                        Button(typingManager.state == .countingDown ? "Cancel" : "Stop") {
                             typingManager.stopTyping()
                         }
                         .buttonStyle(.borderedProminent)
+                        .padding(.top, typingManager.state == .countingDown ? 18 : 0)
                     }
                 }
                 .padding()
+                .environment(\.colorScheme, isCompletionOverlay ? .light : colorScheme)
             }
         }
         .onAppear {
@@ -583,6 +593,36 @@ ESC or switch windows to pause. Switch back to resume.
         }
     }
 
+    @ViewBuilder
+    private func tipIcon(
+        imageName: String,
+        size: CGFloat = 200,
+        cornerRadius: CGFloat = 24
+    ) -> some View {
+        Image(imageName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    private func copyShareLink() {
+        let urlString = "https://github.com/0xff-r4bbit/watchmetype"
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(urlString, forType: .string)
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            shareLinkCopied = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                shareLinkCopied = false
+            }
+        }
+    }
+
     private func flashEstimate() {
         withAnimation(.easeInOut(duration: 0.2)) {
             highlightEstimate = true
@@ -600,21 +640,45 @@ ESC or switch windows to pause. Switch back to resume.
         case .idle:
             return "Idle"
         case .countingDown:
-            if typingManager.countdownRemaining > 0 {
-                return "Starting in \(typingManager.countdownRemaining) seconds…"
-            } else {
-                return "Preparing to start…"
-            }
+            return "Starting…"
         case .typing:
-            let phaseIndicator = hasSecondDraft
-                ? "Phase 1: " : ""
             return typingManager.isThinking
-                ? "\(phaseIndicator)🤔 Thinking 🤔"
-                : "\(phaseIndicator)⌨️ Typing ⌨️"
+                ? "Thinking"
+                : "Typing"
         case .editing:
-            return "Phase 2: ✏️ Editing ✏️"
+            return "Editing"
         case .paused:
-            return "⏸ Paused ⏸"
+            return "Paused"
+        }
+    }
+
+    private var overlaySupportingText: String? {
+        return nil
+    }
+
+    private var overlayPrimaryInstruction: String? {
+        switch typingManager.state {
+        case .typing, .editing:
+            return "Stay in your document."
+        case .paused:
+            return "Switch back to your document to resume."
+        case .idle:
+            return nil
+        case .countingDown:
+            return nil
+        }
+    }
+
+    private var overlayPhaseLabel: String? {
+        switch typingManager.state {
+        case .typing, .paused:
+            return hasSecondDraft ? "Typing phase (1 of 2)" : "Typing phase"
+        case .editing:
+            return hasSecondDraft ? "Editing phase (2 of 2)" : "Editing phase"
+        case .idle:
+            return nil
+        case .countingDown:
+            return nil
         }
     }
 
@@ -714,12 +778,12 @@ ESC or switch windows to pause. Switch back to resume.
             let typingStr = formatDuration(typingDuration)
             let editingStr = formatDuration(editingDuration)
             let totalStr = formatDuration(typingDuration + editingDuration)
-            return "Completed at \(timeString)\nTyping: \(typingStr) | Editing: \(editingStr) | Total: \(totalStr)"
+            return "Finished at \(timeString)\nTyping \(typingStr)\nEditing \(editingStr)\nTotal \(totalStr)"
         } else if let duration = typingManager.lastRunDuration {
             let durationStr = formatDuration(duration)
-            return "Completed at \(timeString) after \(durationStr)."
+            return "Finished at \(timeString)\nTotal \(durationStr)"
         } else {
-            return "Completed at \(timeString)"
+            return "Finished at \(timeString)"
         }
     }
 
