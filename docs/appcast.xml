@@ -4,11 +4,11 @@
         <title>Watch Me Type</title>
         <item>
             <title>2.0.0</title>
-            <pubDate>Fri, 23 Jan 2026 14:36:33 -0800</pubDate>
+            <pubDate>Fri, 23 Jan 2026 15:45:11 -0800</pubDate>
             <sparkle:version>2</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.0/WatchMeType-2.0.0.dmg" length="2250067" type="application/octet-stream" sparkle:edSignature="Of9Vp5k/48TldfKv3kcbFnCp3yL+mf7XLa8zWc6Nva8TAA9Q3rlqQiaMj+GxgKSmyx3oZH6FA/HPTkWqsh3tCg=="/>
+            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.0/WatchMeType-2.0.0.dmg" length="2250066" type="application/octet-stream" sparkle:edSignature="zL/AmjvAl3ZrNZQGZCF3Gb7J/4w/8VB84mSsAKFRmdp7m1OeZ0C12Ky6OZPiBYmmpP3vxY75QP8OFmFGB4G+Cg=="/>
             <sparkle:deltas>
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type2-1.delta" sparkle:deltaFrom="1" length="525670" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="VCaMSsdj6yWeFAJqqyJLSP/zr7oZ4o0vV7htShYHzEBPQ/2u7k8j0+e55i4u/CQOlDoEXiPuqEEYOkt1KBC/Aw=="/>
             </sparkle:deltas>
