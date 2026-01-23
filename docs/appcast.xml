@@ -8,7 +8,7 @@
             <sparkle:version>2</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://0xff-r4bbit.github.io/watchmetype/WatchMeType-2.0.0.dmg" length="2250067" type="application/octet-stream" sparkle:edSignature="Of9Vp5k/48TldfKv3kcbFnCp3yL+mf7XLa8zWc6Nva8TAA9Q3rlqQiaMj+GxgKSmyx3oZH6FA/HPTkWqsh3tCg=="/>
+            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.0/WatchMeType-2.0.0.dmg" length="2250067" type="application/octet-stream" sparkle:edSignature="Of9Vp5k/48TldfKv3kcbFnCp3yL+mf7XLa8zWc6Nva8TAA9Q3rlqQiaMj+GxgKSmyx3oZH6FA/HPTkWqsh3tCg=="/>
             <sparkle:deltas>
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type2-1.delta" sparkle:deltaFrom="1" length="525670" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="VCaMSsdj6yWeFAJqqyJLSP/zr7oZ4o0vV7htShYHzEBPQ/2u7k8j0+e55i4u/CQOlDoEXiPuqEEYOkt1KBC/Aw=="/>
             </sparkle:deltas>
@@ -19,7 +19,7 @@
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://0xff-r4bbit.github.io/watchmetype/WatchMeType-1.0.0.dmg" length="1863773" type="application/octet-stream" sparkle:edSignature="IApAa4r/D558g7BGtwszo754+j57Y3079aoYnzLGnR72hmu2G6I4AM5EGhVss7ezHyZrKzUNQrQA3YGAdikfBA=="/>
+            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v1.0.0/WatchMeType-1.0.0.dmg" length="1863773" type="application/octet-stream" sparkle:edSignature="IApAa4r/D558g7BGtwszo754+j57Y3079aoYnzLGnR72hmu2G6I4AM5EGhVss7ezHyZrKzUNQrQA3YGAdikfBA=="/>
         </item>
     </channel>
 </rss>
