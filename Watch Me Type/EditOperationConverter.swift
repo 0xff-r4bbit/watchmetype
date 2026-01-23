@@ -68,6 +68,54 @@ func tokenizeIntoWords(_ text: String) -> [String] {
 
 // MARK: - Sentence Tokenization
 
+/// Common abbreviations that end with a period but don't end a sentence
+private let commonAbbreviations: Set<String> = [
+    "mr", "mrs", "ms", "dr", "prof", "sr", "jr",
+    "vs", "etc", "inc", "ltd", "corp",
+    "e.g", "i.e", "cf", "al",  // Note: "e.g" and "i.e" without final period
+    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+    "st", "rd", "nd", "th",  // ordinals like 1st, 2nd, 3rd
+    "no", "vol", "pp", "pg", "ch", "sec", "fig",
+    "approx", "dept", "est", "govt", "max", "min"
+]
+
+/// Checks if the text before a period looks like an abbreviation
+/// Returns true if it's likely an abbreviation (not a sentence end)
+private func isLikelyAbbreviation(_ textBeforePeriod: String) -> Bool {
+    // Get the last "word" before the period
+    let trimmed = textBeforePeriod.trimmingCharacters(in: .whitespaces)
+
+    // Find the last word (sequence of letters, possibly with embedded periods like "e.g")
+    var lastWord = ""
+    for char in trimmed.reversed() {
+        if char.isLetter || char == "." {
+            lastWord = String(char) + lastWord
+        } else {
+            break
+        }
+    }
+
+    // Remove trailing period if present for comparison
+    let wordToCheck = lastWord.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+
+    // Check against known abbreviations
+    if commonAbbreviations.contains(wordToCheck) {
+        return true
+    }
+
+    // Single uppercase letter followed by period is likely an initial (e.g., "J. Smith")
+    if lastWord.count == 1 && lastWord.first?.isUppercase == true {
+        return true
+    }
+
+    // Check for patterns like "e.g." or "i.e." (letters with embedded periods)
+    if lastWord.contains(".") && lastWord.filter({ $0.isLetter }).count <= 4 {
+        return true
+    }
+
+    return false
+}
+
 /// Splits text into sentences based on sentence-ending punctuation followed by whitespace
 /// Returns array of sentences with their trailing whitespace/punctuation preserved
 func sentencize(_ text: String) -> [String] {
@@ -91,6 +139,16 @@ func sentencize(_ text: String) -> [String] {
 
             let nextChar = text[nextIndex]
             if nextChar.isWhitespace {
+                // Check if this period is part of an abbreviation
+                if char == "." {
+                    let textBeforePeriod = String(currentSentence.dropLast())
+                    if isLikelyAbbreviation(textBeforePeriod) {
+                        // Not a sentence boundary - continue
+                        i = text.index(after: i)
+                        continue
+                    }
+                }
+
                 // Sentence boundary found - include the whitespace
                 currentSentence.append(nextChar)
                 sentences.append(currentSentence)
@@ -141,6 +199,19 @@ enum Edit {
 func computeEditScript(_ source: [String], _ dest: [String]) -> [Edit] {
     let m = source.count
     let n = dest.count
+
+    // Handle edge cases where source or dest is empty
+    if m == 0 && n == 0 {
+        return []
+    }
+    if m == 0 {
+        // All dest tokens are insertions
+        return dest.map { .insert($0) }
+    }
+    if n == 0 {
+        // All source tokens are deletions
+        return source.map { .delete($0) }
+    }
 
     // Build LCS table using dynamic programming
     var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
@@ -194,15 +265,7 @@ func computeHybridEditScript(draft1: String, draft2: String) -> [Edit] {
     let sentences1 = sentencize(draft1)
     let sentences2 = sentencize(draft2)
 
-    print("DEBUG: Draft 1 sentences: \(sentences1.count)")
-    for (i, s) in sentences1.enumerated() {
-        print("  [\(i)] '\(s.prefix(50))\(s.count > 50 ? "..." : "")'")
-    }
-
-    print("DEBUG: Draft 2 sentences: \(sentences2.count)")
-    for (i, s) in sentences2.enumerated() {
-        print("  [\(i)] '\(s.prefix(50))\(s.count > 50 ? "..." : "")'")
-    }
+    appLog("Draft 1 sentences: \(sentences1.count), Draft 2 sentences: \(sentences2.count)", level: .debug)
 
     // Use POSITIONAL ALIGNMENT: compare sentence i in draft1 with sentence i in draft2
     // This ensures each sentence is independently evaluated for replacement vs. word-level diff
@@ -216,27 +279,25 @@ func computeHybridEditScript(draft1: String, draft2: String) -> [Edit] {
             let newSent = sentences2[i]
             let sim = similarity(oldSent, newSent)
 
-            print("DEBUG: Sentence \(i) - similarity: \(String(format: "%.2f", sim))")
-            print("  Old: '\(oldSent.prefix(50))\(oldSent.count > 50 ? "..." : "")'")
-            print("  New: '\(newSent.prefix(50))\(newSent.count > 50 ? "..." : "")'")
+            appLog("Sentence \(i) - similarity: \(String(format: "%.2f", sim))", level: .verbose)
 
             if sim >= SIMILARITY_THRESHOLD {
                 // High similarity - do word-level diff
-                print("  → Using word-level diff (high similarity)")
+                appLog("Sentence \(i): word-level diff (high similarity)", level: .verbose)
                 let words1 = tokenizeIntoWords(oldSent)
                 let words2 = tokenizeIntoWords(newSent)
                 let wordScript = computeEditScript(words1, words2)
                 result.append(contentsOf: wordScript)
             } else {
                 // Low similarity - replace entire sentence as one atomic operation
-                print("  → Using sentence-level replace (low similarity)")
+                appLog("Sentence \(i): sentence-level replace (low similarity)", level: .verbose)
                 result.append(.delete(oldSent))
                 result.append(.insert(newSent))
             }
 
         } else if i < sentences1.count {
             // Draft1 has extra sentence at this position - delete it
-            print("DEBUG: Sentence \(i) - draft1 only (delete)")
+            appLog("Sentence \(i) - draft1 only (delete)", level: .verbose)
             let sent = sentences1[i]
             let tokens = tokenizeIntoWords(sent)
             for token in tokens {
@@ -245,7 +306,7 @@ func computeHybridEditScript(draft1: String, draft2: String) -> [Edit] {
 
         } else {
             // Draft2 has extra sentence at this position - insert it
-            print("DEBUG: Sentence \(i) - draft2 only (insert)")
+            appLog("Sentence \(i) - draft2 only (insert)", level: .verbose)
             let sent = sentences2[i]
             let tokens = tokenizeIntoWords(sent)
             for token in tokens {
@@ -254,7 +315,7 @@ func computeHybridEditScript(draft1: String, draft2: String) -> [Edit] {
         }
     }
 
-    print("DEBUG: Hybrid script produced \(result.count) token-level operations")
+    appLog("Hybrid script produced \(result.count) token-level operations", level: .debug)
     return result
 }
 
@@ -266,20 +327,7 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
     // Step 1: Compute hybrid edit script using sentence-level analysis
     let editScript = computeHybridEditScript(draft1: draft1, draft2: draft2)
 
-    print("DEBUG: Hybrid edit script (count: \(editScript.count)):")
-    for (index, edit) in editScript.prefix(20).enumerated() {
-        switch edit {
-        case .keep(let word):
-            print("  [\(index)] keep: '\(word.prefix(20))\(word.count > 20 ? "..." : "")'")
-        case .delete(let word):
-            print("  [\(index)] delete: '\(word.prefix(20))\(word.count > 20 ? "..." : "")'")
-        case .insert(let word):
-            print("  [\(index)] insert: '\(word.prefix(20))\(word.count > 20 ? "..." : "")'")
-        }
-    }
-    if editScript.count > 20 {
-        print("  ... (\(editScript.count - 20) more operations)")
-    }
+    appLog("Hybrid edit script count: \(editScript.count)", level: .debug)
 
     // Step 2: Convert edit script to positioned operations with smart grouping
     // Group consecutive delete+insert at same position into .replace operations
@@ -322,7 +370,7 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
                     position: currentPosition,
                     originalIndex: editsWithPositions.count
                 ))
-                print("DEBUG: Replace at position \(currentPosition): \(deleteCount) chars → \(insertText.count) chars")
+                appLog("Replace at position \(currentPosition): \(deleteCount) chars → \(insertText.count) chars", level: .verbose)
             } else {
                 // Just delete, no insert
                 let deleteOp = EditOperation.delete(count: deleteCount)
@@ -331,7 +379,7 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
                     position: currentPosition,
                     originalIndex: editsWithPositions.count
                 ))
-                print("DEBUG: Delete at position \(currentPosition): \(deleteCount) chars")
+                appLog("Delete at position \(currentPosition): \(deleteCount) chars", level: .verbose)
             }
 
             // Move forward in draft1 past the deleted text
@@ -359,7 +407,7 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
                 position: currentPosition,
                 originalIndex: editsWithPositions.count
             ))
-            print("DEBUG: Insert at position \(currentPosition): \(insertText.count) chars '\(insertText.prefix(30))\(insertText.count > 30 ? "..." : "")'")
+            appLog("Insert at position \(currentPosition): \(insertText.count) chars", level: .verbose)
             // Don't move position - insertions don't affect draft1 positions
             i = j
         }
@@ -375,22 +423,7 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
         }
     }
 
-    print("DEBUG: Computed \(sortedEdits.count) positioned edits (backwards order):")
-    for (index, edit) in sortedEdits.prefix(10).enumerated() {
-        switch edit.operation {
-        case .delete(let count):
-            print("  [\(index)] pos \(edit.position): delete \(count) chars")
-        case .insert(let text):
-            print("  [\(index)] pos \(edit.position): insert '\(text.prefix(20))\(text.count > 20 ? "..." : "")'")
-        case .replace(let oldCount, let newText):
-            print("  [\(index)] pos \(edit.position): replace \(oldCount) chars with \(newText.count) chars '\(newText.prefix(20))\(newText.count > 20 ? "..." : "")'")
-        default:
-            print("  [\(index)] pos \(edit.position): \(edit.operation)")
-        }
-    }
-    if sortedEdits.count > 10 {
-        print("  ... (\(sortedEdits.count - 10) more edits)")
-    }
+    appLog("Computed \(sortedEdits.count) positioned edits (backwards order)", level: .debug)
 
     return sortedEdits
 }
@@ -410,23 +443,12 @@ func convertDraftsToEditOperations(draft1: String, draft2: String) -> [EditOpera
     let words1 = tokenizeIntoWords(draft1)
     let words2 = tokenizeIntoWords(draft2)
 
-    print("DEBUG: Draft 1 tokens: \(words1)")
-    print("DEBUG: Draft 2 tokens: \(words2)")
+    appLog("Draft 1 tokens: \(words1.count), Draft 2 tokens: \(words2.count)", level: .debug)
 
     // Step 3: Compute edit script using LCS algorithm
     let editScript = computeEditScript(words1, words2)
 
-    print("DEBUG: Edit script:")
-    for (index, edit) in editScript.enumerated() {
-        switch edit {
-        case .keep(let word):
-            print("  [\(index)] keep: '\(word)'")
-        case .delete(let word):
-            print("  [\(index)] delete: '\(word)'")
-        case .insert(let word):
-            print("  [\(index)] insert: '\(word)'")
-        }
-    }
+    appLog("Edit script computed: \(editScript.count) operations", level: .debug)
 
     // Step 4: Convert edit script to operations using simple, reliable approach
     // Key principle: NEVER use select-and-replace. Always delete then insert.
@@ -455,13 +477,7 @@ func convertDraftsToEditOperations(draft1: String, draft2: String) -> [EditOpera
 
     let optimizedOps = optimizeOperations(operations)
 
-    print("DEBUG: Final operations (count: \(optimizedOps.count)):")
-    for (index, op) in optimizedOps.prefix(20).enumerated() {
-        print("  [\(index)] \(op)")
-    }
-    if optimizedOps.count > 20 {
-        print("  ... (\(optimizedOps.count - 20) more operations)")
-    }
+    appLog("Final operations count: \(optimizedOps.count)", level: .debug)
 
     return optimizedOps
 }

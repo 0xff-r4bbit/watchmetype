@@ -4,7 +4,9 @@
       "Bash(xcodebuild:*)",
       "Bash(swift -typecheck:*)",
       "Bash(swiftc:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(wc:*)"
     ]
   }
 }

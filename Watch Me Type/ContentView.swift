@@ -26,15 +26,14 @@ struct ContentView: View {
     @State private var removeHorizontalRules: Bool = false
     @State private var removeBulletPoints: Bool = false
     @State private var replaceEmDashesWithCommas: Bool = false
-    @State private var showStartConfirmation: Bool = false
     @State private var highlightEstimate: Bool = false
     @State private var useTotalTime: Bool = false
     @State private var hasShownAccessibilityAlert: Bool = false
     @State private var storedNormalWindowFrame: CGRect? = nil
-    @State private var isAdjustingWindowFrame: Bool = false
-    private let compactOverlayWidth: CGFloat = 430
-
-    @FocusState private var isInputFocused: Bool
+    @State private var pendingWindowAdjustment: DispatchWorkItem? = nil
+    private let defaultWindowWidth: CGFloat = 1000
+    private let defaultWindowHeight: CGFloat = 675
+    private let windowAdjustmentDebounce: TimeInterval = 0.05
 
     // Optional total duration
     @State private var desiredDurationValue: String = ""
@@ -52,6 +51,7 @@ struct ContentView: View {
     @State private var showEditingError: Bool = false
     @State private var editingErrorMessage: String = ""
     @State private var shareLinkCopied: Bool = false
+    @State private var showWeChatPayOverlay: Bool = false
 
     @StateObject private var typingManager = TypingManager()
 
@@ -77,426 +77,27 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            VStack(alignment: .leading, spacing: 16) {
-                // App header + support button
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Watch Me Type")
-                            .font(.title)
-                            .bold()
-
-                        Text(.init("an [open-source](https://github.com/0xff-r4bbit/watchmetype) macOS app that mimics human typing"))
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-
-                    KoFiSupportButton()
-                }
-
-                HStack(alignment: .top, spacing: 16) {
-                    // Two-draft layout: Side-by-side editors
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Draft 1")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-
-                            ZStack(alignment: .topLeading) {
-                                TextEditor(text: $inputText)
-                                    .focused($isInputFocused)
-                                    .padding(8)
-                                    .scrollIndicators(.hidden)
-
-                                if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text("Paste your text here.")
-                                        .foregroundColor(.secondary)
-                                        .padding(.top, 14)
-                                        .padding(.leading, 12)
-                                }
-                            }
-                            .frame(minHeight: 260)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(NSColor.textBackgroundColor))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.secondary.opacity(0.3))
-                            )
-                        }
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Draft 2 (optional)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-
-                            ZStack(alignment: .topLeading) {
-                                TextEditor(text: $inputTextDraft2)
-                                    .padding(8)
-                                    .scrollIndicators(.hidden)
-
-                                if inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text("Leave empty to just type, or paste a revised version to simulate editing.")
-                                        .foregroundColor(.secondary)
-                                        .padding(.top, 14)
-                                        .padding(.leading, 12)
-                                }
-                            }
-                            .frame(minHeight: 260)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(NSColor.textBackgroundColor))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.secondary.opacity(0.3))
-                            )
-                        }
-                    }
-
-                    // Right: settings column
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Pre-processing card
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("􂺹  Clean-Up")
-                                .font(.headline)
-                                .bold()
-
-                            Toggle("remove blank lines", isOn: $removeBlankLines)
-                            Toggle("remove emojis", isOn: $removeEmojis)
-                            Toggle("remove horizontal rules", isOn: $removeHorizontalRules)
-                            Toggle("remove bullet points (- ...)", isOn: $removeBulletPoints)
-                            Toggle("replace em-dashes with commas", isOn: $replaceEmDashesWithCommas)
-
-                            Button("Process") {
-                                processInputText()
-                            }
-                            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .padding(.top, 4)
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
-                        )
-
-                        // Typing speed card
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("􀐳 Typing Speed")
-                                .font(.headline)
-                                .bold()
-
-                            // Target speed slider + labels
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Target Speed: \(Int(targetWPM)) WPM")
-                                    .font(.subheadline)
-
-                                Slider(value: $targetWPM, in: 40...120, step: 10)
-
-                                HStack {
-                                    Text("􀓐")
-                                        .font(.subheadline)
-                                    Spacer()
-                                    Text("average")
-                                        .font(.subheadline)
-                                    Spacer()
-                                    Text("􀓎")
-                                        .font(.subheadline)
-                                }
-                            }
-
-                            Toggle("Custom Typing Duration", isOn: $useTotalTime)
-                                .font(.subheadline)
-
-                            // Estimated time or total duration
-                            VStack(alignment: .leading, spacing: 6) {
-                                if useTotalTime {
-                                    HStack(alignment: .center, spacing: 8) {
-                                        Text("type for at least")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                            .padding(.vertical, 4)
-
-                                        TextField("e.g. 10", text: $desiredDurationValue)
-                                            .textFieldStyle(.roundedBorder)
-                                            .frame(width: 60)
-
-                                        Picker("", selection: $durationUnit) {
-                                            ForEach(DurationUnit.allCases) { unit in
-                                                Text(unit.displayName).tag(unit)
-                                            }
-                                        }
-                                        .pickerStyle(.segmented)
-                                        .frame(maxWidth: .infinity)
-                                    }
-                                } else {
-                                    estimatedTimeText
-                                        .font(.subheadline)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .padding(.vertical, 4)
-                                }
-                            }
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
-                        )
-
-                        // Editing options card (shown when draft 2 has content)
-                        if hasSecondDraft {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("􁚝 Editing Phase")
-                                    .font(.headline)
-                                    .bold()
-
-                                Text("The app will type draft 1, then edit it to match draft 2.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-
-                                Toggle("Custom Editing Duration", isOn: $customEditingDuration)
-                                    .font(.subheadline)
-                                    .padding(.top, 4)
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    if customEditingDuration {
-                                        HStack(alignment: .center, spacing: 8) {
-                                            Text("edit for at least")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                                .padding(.vertical, 4)
-
-                                            TextField("e.g. 5", text: $editingDurationValue)
-                                                .textFieldStyle(.roundedBorder)
-                                                .frame(width: 60)
-
-                                            Picker("", selection: $editingDurationUnit) {
-                                                ForEach(DurationUnit.allCases) { unit in
-                                                    Text(unit.displayName).tag(unit)
-                                                }
-                                            }
-                                            .pickerStyle(.segmented)
-                                            .frame(maxWidth: .infinity)
-                                        }
-                                    } else {
-                                        estimatedEditingText
-                                            .font(.subheadline)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .padding(.vertical, 4)
-                                    }
-                                }
-                            }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.secondary.opacity(0.08))
-                            )
-                        }
-
-                        HStack {
-                            Spacer()
-                            Button("Start") {
-                                showStartConfirmation = true
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                        .padding(.top, 4)
-                    }
-                    .frame(width: 320, alignment: .topLeading)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                }
-                .frame(maxHeight: .infinity, alignment: .top)
-
-            }
-            .padding()
-            .frame(
-                minWidth: isOverlayVisible ? compactOverlayWidth : 1000,
-                minHeight: 700
-            )
-            .allowsHitTesting(!isOverlayVisible)
+            mainFormContent
 
             if isOverlayVisible {
-                let isCompletionOverlay = typingManager.state == .idle && typingManager.lastCompletionDate != nil
-                let overlayBackground = isCompletionOverlay ? Color.white : Color.black.opacity(0.7)
-                let overlayPrimaryText = isCompletionOverlay ? Color.black : Color.white
-                let overlaySecondaryText = overlayPrimaryText.opacity(0.75)
-                let overlayTertiaryText = overlayPrimaryText.opacity(0.8)
+                overlayContent
+            }
 
-                BlurOverlay()
+            if showWeChatPayOverlay {
+                // Semi-transparent background - tap to dismiss
+                Color.black.opacity(0.6)
                     .ignoresSafeArea()
-                    .overlay(
-                        overlayBackground
-                            .ignoresSafeArea()
-                    )
-                    // Capture pointer events across the whole window so underlying onHover doesn’t fire.
-                    .contentShape(Rectangle())
-                    .onTapGesture { }
-
-                VStack(spacing: 12) {
-                    if typingManager.state == .idle, typingManager.lastCompletionDate != nil {
-                        VStack(spacing: 12) {
-                            Text("Done")
-                                .font(.system(size: 72, weight: .bold, design: .rounded))
-                                .foregroundColor(overlayPrimaryText)
-
-                            if let subtitle = completionSubtitle {
-                                Text(subtitle)
-                                    .font(.subheadline)
-                                    .foregroundColor(overlaySecondaryText)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
-                            }
-
-                            Spacer()
-                                .frame(height: 16)
-
-                            Text("If this helped you, please consider donating and sharing this app.")
-                                .font(.subheadline)
-                                .foregroundColor(overlayTertiaryText)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-
-                            HStack(spacing: 32) {
-                                Button {
-                                    if let url = URL(string: "https://buymeacoffee.com/0xff.r4bbit") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    tipIcon(
-                                        imageName: "tip_qr_buymeacoffee",
-                                        size: 200,
-                                        cornerRadius: 24
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .hoverPointer()
-
-                                tipIcon(
-                                    imageName: "tip_qr_wechat-pay",
-                                    size: 200,
-                                    cornerRadius: 24
-                                )
-                            }
-                            .padding(.vertical, 24)
-                        }
-                        .padding(.top, 10)
-
-                        HStack(spacing: 12) {
-                            Button(shareLinkCopied ? "Link copied!" : "Share this app") {
-                                copyShareLink()
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button("Let's go again.") {
-                                shareLinkCopied = false
-                                typingManager.stopTyping()
-                                restoreNormalWindowFrame()
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding(.top, 14)
-                    } else {
-                        if typingManager.state == .countingDown {
-                            VStack(spacing: 10) {
-                                Text("Switch to where you want me to type.")
-                                    .font(.title2)
-                                    .bold()
-                                    .foregroundColor(overlayPrimaryText)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.85)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 10)
-
-                                let remaining = max(0, typingManager.countdownRemaining)
-
-                                VStack(spacing: 6) {
-                                    Text("Starting in")
-                                        .font(.subheadline)
-                                        .foregroundColor(overlaySecondaryText)
-
-                                    Text("\(remaining)")
-                                        .font(.system(size: 72, weight: .bold, design: .rounded))
-                                        .foregroundColor(overlayPrimaryText)
-                                }
-                                .accessibilityLabel("Starting in \(remaining) seconds")
-
-                                Spacer()
-                                    .frame(height: 16)
-
-                                ProgressView()
-                                    .progressViewStyle(.linear)
-                                    .frame(maxWidth: 280)
-                                    .opacity(0.7)
-                                    .padding(.horizontal)
-
-                                Text(" ")
-                                    .font(.caption)
-                                    .opacity(0)
-                            }
-                        } else {
-                            let showProgressSection = typingManager.state == .typing
-                                || typingManager.state == .paused
-
-                            VStack(spacing: 10) {
-                                if let instruction = overlayPrimaryInstruction {
-                                    Text(instruction)
-                                        .font(.title2)
-                                        .bold()
-                                        .foregroundColor(overlayPrimaryText)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.85)
-                                        .multilineTextAlignment(.center)
-                                        .padding(.horizontal)
-                                        .padding(.bottom, 10)
-                                }
-
-                                if let label = overlayPhaseLabel {
-                                    Text(label)
-                                        .font(.subheadline)
-                                        .foregroundColor(overlaySecondaryText)
-                                }
-
-                                Text(statusText)
-                                    .font(.system(size: 72, weight: .bold, design: .rounded))
-                                    .foregroundColor(overlayPrimaryText)
-
-                                Spacer()
-                                    .frame(height: 16)
-
-                                ProgressView(value: typingManager.progressFraction)
-                                    .progressViewStyle(.linear)
-                                    .frame(maxWidth: 280)
-                                    .opacity(showProgressSection ? 0.7 : 0)
-                                    .padding(.horizontal)
-                                    .accessibilityHidden(!showProgressSection)
-                                    .allowsHitTesting(showProgressSection)
-
-                                Text("\(Int(typingManager.progressFraction * 100))% complete")
-                                    .font(.caption)
-                                    .foregroundColor(overlaySecondaryText)
-                                    .opacity(showProgressSection ? 1 : 0)
-                                    .accessibilityHidden(!showProgressSection)
-                            }
-                        }
-
-                        Button(typingManager.state == .countingDown ? "Cancel" : "Stop") {
-                            typingManager.stopTyping()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, typingManager.state == .countingDown ? 18 : 0)
+                    .onTapGesture {
+                        showWeChatPayOverlay = false
                     }
-                }
-                .padding()
-                .environment(\.colorScheme, isCompletionOverlay ? .light : colorScheme)
+
+                // Centered QR code image
+                Image("tip_qr_wechat-pay")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 300, maxHeight: 300)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .shadow(radius: 20)
             }
         }
         .onAppear {
@@ -506,82 +107,45 @@ struct ContentView: View {
             flashEstimate()
         }
         .onChange(of: isOverlayVisible) { _, newValue in
-            // When the overlay disappears entirely, ensure we return to a normal window.
+            // When the overlay disappears entirely, ensure window level returns to normal.
+            // Note: Window frame restoration is handled by the "Let's go again" button.
             if !newValue {
                 DispatchQueue.main.async {
                     setWindowAlwaysOnTop(false)
-                    restoreNormalWindowFrame()
                 }
             }
         }
-        .onChange(of: typingManager.state) { _, newState in
+        .onChange(of: typingManager.state) { oldState, newState in
             DispatchQueue.main.async {
                 let isRunActive = newState != .idle
                 setWindowAlwaysOnTop(isRunActive)
 
-                if isRunActive {
+                // Only resize when transitioning from idle to active (starting)
+                if oldState == .idle && isRunActive {
                     compactWindowForOverlay()
-                } else {
-                    // Typing finished (Done overlay may still be visible): return to normal size + window level.
-                    restoreNormalWindowFrame()
+                } else if newState == .idle && typingManager.lastCompletionDate != nil {
+                    // Typing/editing finished - show compact completion overlay
+                    compactWindowForCompletion()
                 }
             }
         }
-        .onChange(of: typingManager.progressText) { _, newText in
-            if newText.contains("aborted due to verification failure") {
+        .onChange(of: typingManager.lastEditingError) { _, error in
+            if let error = error {
                 editingErrorMessage = """
-                Cursor position verification failed during editing.
+                \(error.localizedDescription)
+
+                \(error.recoverySuggestion ?? "")
 
                 This usually happens when:
+                • You switched to a different window during editing
                 • The document was modified externally
-                • The cursor was moved manually
-                • The application's text field behaves unexpectedly
+                • The target application didn't respond to keyboard input
 
-                Please try again, and avoid interacting with the document during editing.
+                Please try again, and avoid interacting with other windows during editing.
                 """
                 showEditingError = true
-            }
-        }
-        .alert("Get ready to start typing!", isPresented: $showStartConfirmation) {
-            Button("Cancel", role: .cancel) {
-                // Just close the alert and return to the main screen
-            }
-
-            Button("Confirm") {
-                if hasSecondDraft {
-                    // Two-phase mode: type Draft 1, then edit to Draft 2
-                    typingManager.startTwoPhaseTyping(
-                        draft1: inputText,
-                        draft2: inputTextDraft2,
-                        wpm: Int(targetWPM),
-                        countdown: 10,
-                        typingDuration: desiredDurationSeconds,
-                        editingDuration: editingDurationSeconds,
-                        simulateMistakes: true
-                    )
-                } else {
-                    // Single-draft mode (existing behavior)
-                    typingManager.startTyping(
-                        text: inputText,
-                        wpm: Int(targetWPM),
-                        countdown: 10,
-                        totalDurationSeconds: desiredDurationSeconds,
-                        simulateMistakes: true
-                    )
-                }
-            }
-        } message: {
-            if hasSecondDraft {
-                Text("""
-You'll have 10 seconds to switch windows.
-Phase 1: Type Draft 1 (ESC or switch window to pause, switch back to resume)
-Phase 2: Edit Draft 1 into Draft 2 (ESC or switch window to stop)
-""")
-            } else {
-                Text("""
-You'll have 10 seconds to switch to the window where the text will go.
-ESC or switch windows to pause. Switch back to resume.
-""")
+                // Clear the error after handling
+                typingManager.lastEditingError = nil
             }
         }
         .alert("Editing Error", isPresented: $showEditingError) {
@@ -604,6 +168,513 @@ ESC or switch windows to pause. Switch back to resume.
             .scaledToFit()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    // MARK: - Extracted Views for Type-Checker Performance
+
+    @ViewBuilder
+    private var mainFormContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // App header + support button
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Watch Me Type")
+                        .font(.title)
+                        .bold()
+
+                    Text(.init("an [open-source](https://github.com/0xff-r4bbit/watchmetype) macOS app that mimics human typing and editing"))
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                KoFiSupportButton(showWeChatPayOverlay: $showWeChatPayOverlay)
+            }
+
+            HStack(alignment: .top, spacing: 16) {
+                draftEditorsSection
+                settingsColumn
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .padding()
+        .frame(
+            minWidth: isOverlayVisible ? defaultWindowWidth * 0.5 : defaultWindowWidth,
+            minHeight: isOverlayVisible ? defaultWindowHeight * 0.5 : defaultWindowHeight
+        )
+        .allowsHitTesting(!isOverlayVisible)
+    }
+
+    @ViewBuilder
+    private var draftEditorsSection: some View {
+        HStack(alignment: .top, spacing: 12) {
+            draftEditorView(
+                title: "Draft 1",
+                text: $inputText,
+                placeholder: "Paste what you want me to type here."
+            )
+
+            draftEditorView(
+                title: "Draft 2 (optional)",
+                text: $inputTextDraft2,
+                placeholder: "Paste your final copy here if you have one."
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func draftEditorView(
+        title: String,
+        text: Binding<String>,
+        placeholder: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: text)
+                    .padding(8)
+                    .scrollIndicators(.hidden)
+
+                if text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(placeholder)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 14)
+                        .padding(.leading, 12)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.3))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var settingsColumn: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            cleanUpCard
+            typingSpeedCard
+
+            if hasSecondDraft {
+                editingPhaseCard
+            }
+
+            HStack {
+                Spacer()
+                Button("Start") {
+                    if hasSecondDraft {
+                        // Two-phase mode: type Draft 1, then edit to Draft 2
+                        typingManager.startTwoPhaseTyping(
+                            draft1: inputText,
+                            draft2: inputTextDraft2,
+                            wpm: Int(targetWPM),
+                            countdown: 10,
+                            typingDuration: desiredDurationSeconds,
+                            editingDuration: editingDurationSeconds,
+                            simulateMistakes: true
+                        )
+                    } else {
+                        // Single-draft mode (existing behavior)
+                        typingManager.startTyping(
+                            text: inputText,
+                            wpm: Int(targetWPM),
+                            countdown: 10,
+                            totalDurationSeconds: desiredDurationSeconds,
+                            simulateMistakes: true
+                        )
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.top, 4)
+        }
+        .frame(width: 320, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var cleanUpCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("􂺹  Clean-Up")
+                .font(.headline)
+                .bold()
+
+            Toggle("remove blank lines", isOn: $removeBlankLines)
+            Toggle("remove emojis", isOn: $removeEmojis)
+            Toggle("remove horizontal rules", isOn: $removeHorizontalRules)
+            Toggle("remove bullet points (- ...)", isOn: $removeBulletPoints)
+            Toggle("replace em-dashes with commas", isOn: $replaceEmDashesWithCommas)
+
+            Button("Process") {
+                processInputText()
+            }
+            .disabled(
+                inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+            .padding(.top, 4)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    @ViewBuilder
+    private var typingSpeedCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("􀐳 Typing Speed")
+                .font(.headline)
+                .bold()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Target Speed: \(Int(targetWPM)) WPM")
+                    .font(.subheadline)
+
+                Slider(value: $targetWPM, in: 40...120, step: 10)
+
+                HStack {
+                    Text("􀓐")
+                        .font(.subheadline)
+                    Spacer()
+                    Text("average")
+                        .font(.subheadline)
+                    Spacer()
+                    Text("􀓎")
+                        .font(.subheadline)
+                }
+            }
+
+            Toggle("Custom Typing Duration", isOn: $useTotalTime)
+                .font(.subheadline)
+
+            VStack(alignment: .leading, spacing: 6) {
+                if useTotalTime {
+                    customDurationPicker
+                } else {
+                    estimatedTimeText
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    @ViewBuilder
+    private var customDurationPicker: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text("type for at least")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.vertical, 4)
+
+            TextField("e.g. 10", text: $desiredDurationValue)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+
+            Picker("", selection: $durationUnit) {
+                ForEach(DurationUnit.allCases) { unit in
+                    Text(unit.displayName).tag(unit)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var editingPhaseCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("􁚝 Editing Phase")
+                .font(.headline)
+                .bold()
+
+            Text("The app will type draft 1, then edit it to match draft 2.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Toggle("Custom Editing Duration", isOn: $customEditingDuration)
+                .font(.subheadline)
+                .padding(.top, 4)
+
+            VStack(alignment: .leading, spacing: 6) {
+                if customEditingDuration {
+                    editingDurationPicker
+                } else {
+                    estimatedEditingText
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    @ViewBuilder
+    private var editingDurationPicker: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text("edit for at least")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.vertical, 4)
+
+            TextField("e.g. 5", text: $editingDurationValue)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+
+            Picker("", selection: $editingDurationUnit) {
+                ForEach(DurationUnit.allCases) { unit in
+                    Text(unit.displayName).tag(unit)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var overlayContent: some View {
+        let isCompletionOverlay = typingManager.state == .idle && typingManager.lastCompletionDate != nil
+        let overlayBackground = isCompletionOverlay ? Color.white : Color.black.opacity(0.7)
+        let overlayPrimaryText = isCompletionOverlay ? Color.black : Color.white
+        let overlaySecondaryText = overlayPrimaryText.opacity(0.75)
+        let overlayTertiaryText = overlayPrimaryText.opacity(0.8)
+
+        BlurOverlay()
+            .ignoresSafeArea()
+            .overlay(
+                overlayBackground
+                    .ignoresSafeArea()
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { }
+
+        VStack(spacing: 12) {
+            if typingManager.state == .idle, typingManager.lastCompletionDate != nil {
+                completionOverlayContent(
+                    primaryText: overlayPrimaryText,
+                    secondaryText: overlaySecondaryText,
+                    tertiaryText: overlayTertiaryText
+                )
+            } else {
+                activeOverlayContent(
+                    primaryText: overlayPrimaryText,
+                    secondaryText: overlaySecondaryText
+                )
+            }
+        }
+        .padding()
+        .environment(\.colorScheme, isCompletionOverlay ? .light : colorScheme)
+    }
+
+    @ViewBuilder
+    private func completionOverlayContent(
+        primaryText: Color,
+        secondaryText: Color,
+        tertiaryText: Color
+    ) -> some View {
+        VStack(spacing: 12) {
+            Text("Done")
+                .font(.system(size: 72, weight: .bold, design: .rounded))
+                .foregroundColor(primaryText)
+
+            if let subtitle = completionSubtitle {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+
+            Spacer()
+                .frame(height: 16)
+
+            Text("If this helped you, please consider donating and sharing this app.")
+                .font(.subheadline)
+                .foregroundColor(tertiaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            HStack(spacing: 32) {
+                Button {
+                    if let url = URL(string: "https://Ko-fi.com/0xffr4bbit") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    tipIcon(
+                        imageName: "tip_qr_ko-fi",
+                        size: 200,
+                        cornerRadius: 24
+                    )
+                }
+                .buttonStyle(.plain)
+                .hoverPointer()
+
+                tipIcon(
+                    imageName: "tip_qr_wechat-pay",
+                    size: 200,
+                    cornerRadius: 24
+                )
+            }
+            .padding(.vertical, 24)
+        }
+        .padding(.top, 10)
+
+        HStack(spacing: 12) {
+            Button(shareLinkCopied ? "Link copied!" : "Share this app.") {
+                copyShareLink()
+                shareLinkCopied = false
+                typingManager.stopTyping()
+                restoreNormalWindowFrame()
+            }
+            .buttonStyle(.bordered)
+
+            Button("Let's go again.") {
+                shareLinkCopied = false
+                typingManager.stopTyping()
+                restoreNormalWindowFrame()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.top, 14)
+    }
+
+    @ViewBuilder
+    private func activeOverlayContent(
+        primaryText: Color,
+        secondaryText: Color
+    ) -> some View {
+        if typingManager.state == .countingDown {
+            countdownOverlayContent(primaryText: primaryText, secondaryText: secondaryText)
+        } else {
+            typingOverlayContent(primaryText: primaryText, secondaryText: secondaryText)
+        }
+
+        Button(typingManager.state == .countingDown ? "Cancel" : "Stop") {
+            typingManager.stopTyping()
+        }
+        .buttonStyle(.borderedProminent)
+        .padding(.top, typingManager.state == .countingDown ? 18 : 0)
+    }
+
+    @ViewBuilder
+    private func countdownOverlayContent(
+        primaryText: Color,
+        secondaryText: Color
+    ) -> some View {
+        VStack(spacing: 10) {
+            Text("Switch to where you want me to type.")
+                .font(.title2)
+                .bold()
+                .foregroundColor(primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .padding(.bottom, 10)
+
+            let remaining = max(0, typingManager.countdownRemaining)
+
+            VStack(spacing: 6) {
+                Text("Starting in")
+                    .font(.subheadline)
+                    .foregroundColor(secondaryText)
+
+                Text("\(remaining)")
+                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .foregroundColor(primaryText)
+            }
+            .accessibilityLabel("Starting in \(remaining) seconds")
+
+            Spacer()
+                .frame(height: 16)
+
+            ProgressView()
+                .progressViewStyle(.linear)
+                .frame(maxWidth: 280)
+                .opacity(0.7)
+                .padding(.horizontal)
+
+            Text(" ")
+                .font(.caption)
+                .opacity(0)
+        }
+    }
+
+    @ViewBuilder
+    private func typingOverlayContent(
+        primaryText: Color,
+        secondaryText: Color
+    ) -> some View {
+        let showProgressSection = typingManager.state == .typing
+            || typingManager.state == .paused
+
+        VStack(spacing: 10) {
+            if let instruction = overlayPrimaryInstruction {
+                Text(instruction)
+                    .font(.title2)
+                    .bold()
+                    .foregroundColor(primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                    .padding(.bottom, 10)
+            }
+
+            if let label = overlayPhaseLabel {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(secondaryText)
+            }
+
+            Text(statusText)
+                .font(.system(size: 64, weight: .bold, design: .rounded))
+                .foregroundColor(primaryText)
+
+            Spacer()
+                .frame(height: 16)
+
+            ProgressView(value: typingManager.progressFraction)
+                .progressViewStyle(.linear)
+                .frame(maxWidth: 280)
+                .opacity(showProgressSection ? 0.7 : 0)
+                .padding(.horizontal)
+                .accessibilityHidden(!showProgressSection)
+                .allowsHitTesting(showProgressSection)
+
+            Text("\(Int(typingManager.progressFraction * 100))% complete")
+                .font(.caption)
+                .foregroundColor(secondaryText)
+                .opacity(showProgressSection ? 1 : 0)
+                .accessibilityHidden(!showProgressSection)
+        }
     }
 
     private func copyShareLink() {
@@ -672,9 +743,9 @@ ESC or switch windows to pause. Switch back to resume.
     private var overlayPhaseLabel: String? {
         switch typingManager.state {
         case .typing, .paused:
-            return hasSecondDraft ? "Typing phase (1 of 2)" : "Typing phase"
+            return hasSecondDraft ? "Typing Phase (1 of 2)" : "Typing Phase"
         case .editing:
-            return hasSecondDraft ? "Editing phase (2 of 2)" : "Editing phase"
+            return hasSecondDraft ? "Editing Phase (2 of 2)" : "Editing Phase"
         case .idle:
             return nil
         case .countingDown:
@@ -860,10 +931,18 @@ ESC or switch windows to pause. Switch back to resume.
     }
 
     private func processInputText() {
-        var text = inputText
+        // Process both drafts
+        inputText = processText(inputText)
+        if !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            inputTextDraft2 = processText(inputTextDraft2)
+        }
+    }
+
+    private func processText(_ text: String) -> String {
+        var result = text
 
         if removeBlankLines || removeHorizontalRules || removeBulletPoints {
-            let lines = text.components(separatedBy: .newlines)
+            let lines = result.components(separatedBy: .newlines)
             var newLines: [String] = []
 
             for line in lines {
@@ -886,32 +965,32 @@ ESC or switch windows to pause. Switch back to resume.
                 newLines.append(processedLine)
             }
 
-            text = newLines.joined(separator: "\n")
+            result = newLines.joined(separator: "\n")
         }
 
         if removeEmojis {
-            text = String(text.filter { !$0.isEmojiCharacter })
+            result = String(result.filter { !$0.isEmojiCharacter })
         }
 
         if replaceEmDashesWithCommas {
-            text = replacingEmDashesWithCommas(in: text)
+            result = replacingEmDashesWithCommas(in: result)
         }
 
         // Collapse multiple spaces into single spaces.
-        while text.contains("  ") {
-            text = text.replacingOccurrences(of: "  ", with: " ")
+        while result.contains("  ") {
+            result = result.replacingOccurrences(of: "  ", with: " ")
         }
 
         // Remove stray spaces immediately before common punctuation.
         let punctuations = [",", ".", "!", "?", ":", ";"]
         for p in punctuations {
             let bad = " " + p
-            while text.contains(bad) {
-                text = text.replacingOccurrences(of: bad, with: p)
+            while result.contains(bad) {
+                result = result.replacingOccurrences(of: bad, with: p)
             }
         }
 
-        inputText = text
+        return result
     }
 
     private func handleAccessibilityOnAppear() {
@@ -921,6 +1000,9 @@ ESC or switch windows to pause. Switch back to resume.
 
         // Move the window out of the way as soon as it actually exists on screen.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Set window to default size on first launch
+            setWindowToDefaultSize()
+
             // Store the normal frame once (used to restore after the overlay compacts the window).
             storeNormalWindowFrameIfNeeded()
 
@@ -931,6 +1013,21 @@ ESC or switch windows to pause. Switch back to resume.
                 showAccessibilityPreflightAlert()
             }
         }
+    }
+
+    private func setWindowToDefaultSize() {
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+        var newFrame = window.frame
+        newFrame.size.width = defaultWindowWidth
+        newFrame.size.height = defaultWindowHeight
+
+        // Keep window within screen bounds
+        newFrame.origin.x = min(newFrame.origin.x, screenFrame.maxX - newFrame.size.width - 20)
+        newFrame.origin.y = screenFrame.midY - newFrame.size.height / 2
+
+        window.setFrame(newFrame, display: true, animate: false)
     }
 
     private func moveWindowToRightEdge() {
@@ -965,29 +1062,50 @@ ESC or switch windows to pause. Switch back to resume.
 
     private func compactWindowForOverlay() {
         storeNormalWindowFrameIfNeeded()
+        // Status overlay (typing/editing/thinking): ~28% width, 50% height
+        resizeWindowCompact(widthFraction: 0.2, heightFraction: 0.5)
+    }
 
+    private func compactWindowForCompletion() {
+        // Completion overlay
+        resizeWindowCompact(widthFraction: 0.66, heightFraction: 1)
+        setWindowResizable(false)
+    }
+
+    private func setWindowResizable(_ resizable: Bool) {
         guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
-        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        if resizable {
+            window.styleMask.insert(.resizable)
+        } else {
+            window.styleMask.remove(.resizable)
+        }
+    }
 
-        var newFrame = window.frame
-        newFrame.size.width = compactOverlayWidth
+    private func resizeWindowCompact(widthFraction: CGFloat, heightFraction: CGFloat) {
+        // Cancel any pending window adjustment to prevent race conditions
+        pendingWindowAdjustment?.cancel()
 
-        // Keep the right edge aligned to the screen’s right edge (with a small margin).
-        newFrame.origin.x = screenFrame.maxX - newFrame.size.width - 20
+        let overlayWidth = defaultWindowWidth * widthFraction
+        let overlayHeight = defaultWindowHeight * heightFraction
+        let workItem = DispatchWorkItem {
+            guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+            guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
 
-        // Keep the window vertically centred (same approach as `moveWindowToRightEdge`).
-        newFrame.origin.y = screenFrame.midY - newFrame.size.height / 2
+            var newFrame = window.frame
+            newFrame.size.width = overlayWidth
+            newFrame.size.height = overlayHeight
 
-        // Defer window frame changes to avoid triggering AppKit layout recursion during SwiftUI updates.
-        DispatchQueue.main.async {
+            // Keep the right edge aligned to the screen's right edge (with a small margin).
+            newFrame.origin.x = screenFrame.maxX - newFrame.size.width - 20
+
+            // Keep the window vertically centred.
+            newFrame.origin.y = screenFrame.midY - newFrame.size.height / 2
+
             window.setFrame(newFrame, display: true, animate: false)
 
-            // Correction pass: ensure alignment after SwiftUI may enforce a larger min width.
-            DispatchQueue.main.async {
-                guard !isAdjustingWindowFrame else { return }
-                isAdjustingWindowFrame = true
-                defer { isAdjustingWindowFrame = false }
-
+            // Single delayed correction pass (instead of nested async)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
                 guard let screenFrame2 = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
 
                 let current = window.frame
@@ -1005,6 +1123,9 @@ ESC or switch windows to pause. Switch back to resume.
                 window.setFrame(corrected, display: true, animate: false)
             }
         }
+
+        pendingWindowAdjustment = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + windowAdjustmentDebounce, execute: workItem)
     }
 
     private func adjustWindowPositionForEditingMode() {
@@ -1032,30 +1153,29 @@ ESC or switch windows to pause. Switch back to resume.
 
     private func restoreNormalWindowFrame() {
         guard let normal = storedNormalWindowFrame else { return }
-        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
-        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else {
-            // Defer window frame changes to avoid triggering AppKit layout recursion during SwiftUI updates.
-            DispatchQueue.main.async {
-                window.setFrame(normal, display: true, animate: false)
+
+        // Re-enable window resizing (disabled during completion overlay)
+        setWindowResizable(true)
+
+        // Cancel any pending window adjustment to prevent race conditions
+        pendingWindowAdjustment?.cancel()
+
+        let workItem = DispatchWorkItem {
+            guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+
+            var restored = normal
+
+            // Re-align to the right edge of the *current* display in case the window moved screens.
+            if let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame {
+                restored.origin.x = screenFrame.maxX - restored.size.width - 20
+                restored.origin.y = screenFrame.midY - restored.size.height / 2
             }
-            return
-        }
 
-        var restored = normal
-        // Re-align to the right edge of the *current* display in case the window moved screens.
-        restored.origin.x = screenFrame.maxX - restored.size.width - 20
-        restored.origin.y = screenFrame.midY - restored.size.height / 2
-
-        // Defer window frame changes to avoid triggering AppKit layout recursion during SwiftUI updates.
-        DispatchQueue.main.async {
             window.setFrame(restored, display: true, animate: false)
 
-            // Correction pass: ensure alignment after SwiftUI may enforce a larger min width.
-            DispatchQueue.main.async {
-                guard !isAdjustingWindowFrame else { return }
-                isAdjustingWindowFrame = true
-                defer { isAdjustingWindowFrame = false }
-
+            // Single delayed correction pass (instead of nested async)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
                 guard let screenFrame2 = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
 
                 let current = window.frame
@@ -1073,6 +1193,9 @@ ESC or switch windows to pause. Switch back to resume.
                 window.setFrame(corrected, display: true, animate: false)
             }
         }
+
+        pendingWindowAdjustment = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + windowAdjustmentDebounce, execute: workItem)
     }
 
     private func showAccessibilityPreflightAlert() {
@@ -1120,6 +1243,8 @@ struct BlurOverlay: NSViewRepresentable {
 }
 
 struct KoFiSupportButton: View {
+    @Binding var showWeChatPayOverlay: Bool
+
     var body: some View {
         HStack(spacing: 8) {
             Text("Please support this app.")
@@ -1144,22 +1269,20 @@ struct KoFiSupportButton: View {
             .help("open Ko-fi")
             .hoverPointer()
 
-            // Buy Me a Coffee button
+            // WeChat Pay button
             Button {
-                if let url = URL(string: "https://buymeacoffee.com/0xff.r4bbit") {
-                    NSWorkspace.shared.open(url)
-                }
+                showWeChatPayOverlay = true
             } label: {
-                Image("tip_buymeacoffee")
+                Image("tip_wechat-pay")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 16, height: 16)
                     .padding(8)
-                    .background(Color(hex: "#FFDD03"))
+                    .background(Color(hex: "#07C160"))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
-            .help("open Buy Me a Coffee")
+            .help("WeChat Pay")
             .hoverPointer()
         }
         .padding(.horizontal, 0)

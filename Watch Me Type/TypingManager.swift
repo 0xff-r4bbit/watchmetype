@@ -27,6 +27,28 @@ enum TypingState: Sendable, Equatable {
     case paused
 }
 
+/// Errors that can occur during the editing phase
+enum EditingError: Error, LocalizedError, Sendable, Equatable {
+    case focusLostDuringEdit
+    case keyboardEventFailed
+    case unexpectedState(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .focusLostDuringEdit:
+            return "Focus was lost during editing. The document may be partially edited."
+        case .keyboardEventFailed:
+            return "Failed to send keyboard events to the target application."
+        case .unexpectedState(let details):
+            return "An unexpected error occurred: \(details)"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        return "You can use Cmd+Z to undo any changes made before the error occurred."
+    }
+}
+
 final class TypingManager: NSObject, ObservableObject {
 
     // Backwards editing state removed - now using EditWithPosition from EditOperationConverter
@@ -40,6 +62,7 @@ final class TypingManager: NSObject, ObservableObject {
     @Published var lastTypingPhaseDuration: TimeInterval?
     @Published var lastEditingPhaseDuration: TimeInterval?
     @Published var progressFraction: Double = 0.0  // 0.0 = not started, 1.0 = complete
+    @Published var lastEditingError: EditingError?  // Set when editing fails, cleared after handling
 
     private var countdownTimer: Timer?
     private var typingStartDate: Date?
@@ -250,6 +273,7 @@ final class TypingManager: NSObject, ObservableObject {
         editingStartDate = nil
         extraDelayPerEdit = 0
         progressFraction = 0.0
+        lastEditingError = nil
     }
     
     // MARK: - Private typing logic
@@ -270,7 +294,7 @@ final class TypingManager: NSObject, ObservableObject {
         targetAppPID = frontmostApp?.processIdentifier
         targetWindowTitle = getFocusedWindowTitle()
 
-        print("DEBUG: Target app recorded - PID: \(targetAppPID ?? 0), name: '\(frontmostApp?.localizedName ?? "unknown")', window: '\(targetWindowTitle ?? "unknown")'")
+        appLog("Target app recorded - PID: \(targetAppPID ?? 0), name: '\(frontmostApp?.localizedName ?? "unknown")', window: '\(targetWindowTitle ?? "unknown")'", level: .debug)
 
         state = .typing
         progressText = "Typing in progress…"
@@ -310,8 +334,8 @@ final class TypingManager: NSObject, ObservableObject {
         // This ensures we NEVER type even a single character in the wrong window
         if !isTargetWindowFocused() {
             let currentWindow = getFocusedWindowTitle()
-            print("DEBUG: Focus check before character - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
-            print("DEBUG: Not in target window, pausing typing")
+            appLog("Focus check before character - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'", level: .debug)
+            appLog("Not in target window, pausing typing", level: .debug)
             pauseTyping()
             return
         }
@@ -416,25 +440,25 @@ final class TypingManager: NSObject, ObservableObject {
             let isTargetFocused = self.isTargetWindowFocused()
             let currentWindowTitle = self.getFocusedWindowTitle()
 
-            print("DEBUG: App change - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindowTitle ?? "none")' Focused: \(isTargetFocused)")
+            appLog("App change - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindowTitle ?? "none")' Focused: \(isTargetFocused)", level: .debug)
 
             switch self.state {
             case .typing:
                 // If we leave the target window, pause
                 if !isTargetFocused {
-                    print("DEBUG: Leaving target window, pausing typing")
+                    appLog("Leaving target window, pausing typing", level: .debug)
                     self.pauseTyping()
                 }
             case .editing:
-                // If we leave the target window during editing, stop completely
+                // If we leave the target window during editing, abort with error
                 if !isTargetFocused {
-                    print("DEBUG: Leaving target window, stopping editing")
-                    self.stopTyping()
+                    appLog("Leaving target window, aborting editing", level: .debug)
+                    self.abortEditingWithError(.focusLostDuringEdit)
                 }
             case .paused:
                 // If we come back to the target window, resume
                 if isTargetFocused {
-                    print("DEBUG: Returned to target window, resuming")
+                    appLog("Returned to target window, resuming", level: .debug)
                     // Use tracked state to determine whether to resume typing or editing
                     if self.stateBeforePause == .editing {
                         self.resumeEditing()
@@ -505,15 +529,15 @@ final class TypingManager: NSObject, ObservableObject {
                 // Check if we're still in the target window
                 if !self.isTargetWindowFocused() {
                     let currentWindow = self.getFocusedWindowTitle()
-                    print("DEBUG: Periodic check detected window switch - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
+                    appLog("Periodic check detected window switch - Target: '\(self.targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'", level: .debug)
 
-                    // Pause typing, stop editing
+                    // Pause typing, abort editing with error
                     if self.state == .typing {
-                        print("DEBUG: Auto-pausing typing")
+                        appLog("Auto-pausing typing", level: .debug)
                         self.pauseTyping()
                     } else if self.state == .editing {
-                        print("DEBUG: Auto-stopping editing (window switch)")
-                        self.stopTyping()
+                        appLog("Auto-aborting editing (window switch)", level: .debug)
+                        self.abortEditingWithError(.focusLostDuringEdit)
                     }
                 }
             }
@@ -559,19 +583,19 @@ final class TypingManager: NSObject, ObservableObject {
         // Must have at least the target app PID to do any checking
         guard let targetPID = targetAppPID else {
             // If we don't have a recorded target app, allow typing
-            print("DEBUG: No target app recorded, allowing typing")
+            appLog("No target app recorded, allowing typing", level: .debug)
             return true
         }
 
         // Check if the frontmost app matches
         guard let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
-            print("DEBUG: Can't get frontmost app PID - pausing")
+            appLog("Can't get frontmost app PID - pausing", level: .debug)
             return false
         }
 
         // If app doesn't match, definitely not the right window
         if frontmostPID != targetPID {
-            print("DEBUG: App PID mismatch - target: \(targetPID), current: \(frontmostPID)")
+            appLog("App PID mismatch - target: \(targetPID), current: \(frontmostPID)", level: .debug)
             return false
         }
 
@@ -580,13 +604,13 @@ final class TypingManager: NSObject, ObservableObject {
             guard let currentWindowTitle = getFocusedWindowTitle() else {
                 // Can't determine current window title but app matches
                 // Be conservative and assume wrong window
-                print("DEBUG: Can't get current window title, being conservative")
+                appLog("Can't get current window title, being conservative", level: .debug)
                 return false
             }
 
             // Compare window titles
             if currentWindowTitle != targetTitle {
-                print("DEBUG: Window title mismatch - target: '\(targetTitle)', current: '\(currentWindowTitle)'")
+                appLog("Window title mismatch - target: '\(targetTitle)', current: '\(currentWindowTitle)'", level: .debug)
                 return false
             }
         }
@@ -706,9 +730,9 @@ final class TypingManager: NSObject, ObservableObject {
     private func sendCharacter(_ character: Character) {
         let source = CGEventSource(stateID: .hidSystemState)
 
-        // Debug: Log that we're inside sendCharacter
+        // Log character sending at verbose level (very frequent)
         let unicodeVal = character.unicodeScalars.first?.value ?? 0
-        print("  -> sendCharacter called: '\(character)' (U+\(String(format: "%04X", unicodeVal)))")
+        appLog("sendCharacter: '\(character)' (U+\(String(format: "%04X", unicodeVal)))", level: .verbose)
 
         // Special-case newlines: send a real Return key event so apps treat it
         // exactly like pressing the Enter/Return key, instead of a raw "\n".
@@ -1088,13 +1112,11 @@ final class TypingManager: NSObject, ObservableObject {
         draft2Text = draft2
         editingStartDate = Date()
 
-        print("DEBUG TypingManager: Starting backwards editing")
-        print("  Draft 1 length: \(draft1.count)")
-        print("  Draft 2 length: \(draft2.count)")
+        appLog("Starting backwards editing - Draft 1: \(draft1.count) chars, Draft 2: \(draft2.count) chars", level: .info)
 
         // Step 1: Compute positioned edits (sorted right-to-left)
         positionedEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2)
-        print("DEBUG: Generated \(positionedEdits.count) positioned edits")
+        appLog("Generated \(positionedEdits.count) positioned edits", level: .debug)
 
         // Step 2: Initialize editing state
         state = .editing
@@ -1113,9 +1135,7 @@ final class TypingManager: NSObject, ObservableObject {
             if extraBudget > 0 {
                 // Distribute extra time across all edit operations
                 extraDelayPerEdit = extraBudget / Double(positionedEdits.count)
-                print("DEBUG: Custom editing duration requested: \(targetDuration)s")
-                print("DEBUG: Natural editing time estimate: \(naturalEditingTime)s")
-                print("DEBUG: Extra delay per edit: \(extraDelayPerEdit)s")
+                appLog("Custom editing duration: \(targetDuration)s, natural estimate: \(naturalEditingTime)s, extra delay per edit: \(extraDelayPerEdit)s", level: .debug)
             }
         }
 
@@ -1240,16 +1260,14 @@ final class TypingManager: NSObject, ObservableObject {
         // This ensures we NEVER edit in the wrong window
         if !isTargetWindowFocused() {
             let currentWindow = getFocusedWindowTitle()
-            print("DEBUG: Focus check before edit - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'")
-            print("DEBUG: Not in target window, pausing editing")
-            pauseEditing()
+            appLog("Focus check before edit - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'", level: .debug)
+            appLog("Not in target window, aborting editing", level: .debug)
+            abortEditingWithError(.focusLostDuringEdit)
             return
         }
 
         let edit = positionedEdits[currentEditIndex]
-        print("DEBUG: Executing edit \(currentEditIndex + 1)/\(positionedEdits.count)")
-        print("  Actual cursor position: \(actualCursorPosition)")
-        print("  Target position (draft1): \(edit.position)")
+        appLog("Executing edit \(currentEditIndex + 1)/\(positionedEdits.count) - cursor: \(actualCursorPosition), target: \(edit.position)", level: .debug)
 
         // Navigate to the edit position and execute it
         navigateAndExecuteEdit(edit)
@@ -1263,7 +1281,7 @@ final class TypingManager: NSObject, ObservableObject {
         let leftMoveCount = actualCursorPosition - targetPosition
 
         if leftMoveCount > 0 {
-            print("  Moving left: \(leftMoveCount) characters")
+            appLog("Moving left: \(leftMoveCount) characters", level: .debug)
             navigateLeftAndExecute(count: leftMoveCount, edit: edit)
         } else {
             // Already at the position - still pause before edit
@@ -1299,7 +1317,7 @@ final class TypingManager: NSObject, ObservableObject {
 
         switch edit.operation {
         case .delete(let count):
-            print("DEBUG: Deleting \(count) characters with forward delete")
+            appLog("Deleting \(count) characters with forward delete", level: .debug)
             // Delete characters one at a time using forward delete (simpler, more reliable)
             let deleteDelay = 0.1 * editingDelayMultiplier
             sendKeysWithDelay(count: count, delay: deleteDelay) {
@@ -1309,7 +1327,7 @@ final class TypingManager: NSObject, ObservableObject {
 
                 // After deleting, cursor stays at targetPosition
                 self.actualCursorPosition = targetPosition
-                print("DEBUG: Deleted \(count) chars, cursor now at \(self.actualCursorPosition)")
+                appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
 
                 // Short pause after deletion
                 let postDeleteDelay = 0.3 * self.editingDelayMultiplier
@@ -1320,7 +1338,7 @@ final class TypingManager: NSObject, ObservableObject {
             }
 
         case .insert(let text):
-            print("DEBUG: Inserting '\(text.prefix(20))\(text.count > 20 ? "..." : "")'")
+            appLog("Inserting '\(text.prefix(20))\(text.count > 20 ? "..." : "")'", level: .debug)
             let baseDelay = max(0.05, interCharacterDelay)
             let delay = baseDelay * editingDelayMultiplier
             sendCharactersWithDelay(text, delay: delay) { [weak self] in
@@ -1329,7 +1347,7 @@ final class TypingManager: NSObject, ObservableObject {
                 // After insertion, cursor is at targetPosition + inserted text length
                 // NO move-back needed! We track actual position for next navigation
                 self.actualCursorPosition = targetPosition + text.count
-                print("DEBUG: Inserted \(text.count) chars, cursor now at \(self.actualCursorPosition)")
+                appLog("Inserted \(text.count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
 
                 // Longer pause after insert to let web editors catch up
                 let postInsertDelay = 0.3 * self.editingDelayMultiplier
@@ -1340,14 +1358,14 @@ final class TypingManager: NSObject, ObservableObject {
             }
 
         case .replace(let oldCount, let newText):
-            print("DEBUG: Replacing \(oldCount) chars with '\(newText.prefix(30))\(newText.count > 30 ? "..." : "")'")
+            appLog("Replacing \(oldCount) chars with '\(newText.prefix(30))\(newText.count > 30 ? "..." : "")'", level: .debug)
             executeReplace(oldCount: oldCount, newText: newText) { [weak self] in
                 guard let self = self, self.state == .editing else { return }
 
                 // After replace, cursor is at targetPosition + new text length
                 // NO move-back needed!
                 self.actualCursorPosition = targetPosition + newText.count
-                print("DEBUG: Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)")
+                appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
 
                 // Longer pause after replace to let web editors catch up
                 let postReplaceDelay = 0.3 * self.editingDelayMultiplier
@@ -1363,43 +1381,47 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
-    /// Executes an atomic replace operation: delete oldCount chars with forward delete, then insert newText
+    /// Executes an atomic replace operation: delete the old text first, then insert the new text.
+    /// This is the standard replace behavior - select/delete old content, then type new content.
     private func executeReplace(oldCount: Int, newText: String, completion: @escaping () -> Void) {
-        // Step 1: Delete forward by oldCount using forward delete (simpler than selection)
+        let deleteDelay = 0.1 * editingDelayMultiplier
+        let postDeleteDelay = 0.3 * editingDelayMultiplier
+        let postInsertDelay = 0.3 * editingDelayMultiplier
+        let baseDelay = max(0.05, interCharacterDelay) * editingDelayMultiplier
+
+        // Insert the new text AFTER deleting the old text.
+        let performInsert: () -> Void = { [weak self] in
+            guard let self = self else { return }
+
+            guard !newText.isEmpty else {
+                completion()
+                return
+            }
+
+            self.sendCharactersWithDelay(newText, delay: baseDelay) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + postInsertDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    completion()
+                }
+            }
+        }
+
+        // Delete first, then insert the new content.
         if oldCount > 0 {
-            let deleteDelay = 0.1 * editingDelayMultiplier
-            sendKeysWithDelay(count: oldCount, delay: deleteDelay) {
+            self.sendKeysWithDelay(count: oldCount, delay: deleteDelay) {
                 self.sendForwardDelete()
             } completion: { [weak self] in
                 guard let self = self, self.state == .editing else { return }
 
-                // Short pause after deletion before typing
-                let postDeleteDelay = 0.3 * self.editingDelayMultiplier
                 DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
                     guard let self = self, self.state == .editing else { return }
-                    // Step 2: Insert new text (if any)
-                    if !newText.isEmpty {
-                        let baseDelay = max(0.05, self.interCharacterDelay)
-                        let delay = baseDelay * self.editingDelayMultiplier
-                        self.sendCharactersWithDelay(newText, delay: delay) {
-                            completion()
-                        }
-                    } else {
-                        completion()
-                    }
+                    performInsert()
                 }
             }
         } else {
-            // Just insert (pure insertion, no deletion)
-            if !newText.isEmpty {
-                let baseDelay = max(0.05, self.interCharacterDelay)
-                let delay = baseDelay * self.editingDelayMultiplier
-                self.sendCharactersWithDelay(newText, delay: delay) {
-                    completion()
-                }
-            } else {
-                completion()
-            }
+            performInsert()
         }
     }
 
@@ -1516,22 +1538,38 @@ final class TypingManager: NSObject, ObservableObject {
             return
         }
 
+        // CRITICAL: Check focus BEFORE typing each character during editing
+        // This ensures we NEVER type even a single character in the wrong window
+        if !isTargetWindowFocused() {
+            let currentWindow = getFocusedWindowTitle()
+            appLog("Focus check before edit char - Target: '\(targetWindowTitle ?? "none")' Current: '\(currentWindow ?? "none")'", level: .debug)
+            appLog("Not in target window, aborting editing", level: .debug)
+            abortEditingWithError(.focusLostDuringEdit)
+            return
+        }
+
         let character = editCharsToType[editCharIndex]
         let charIndex = editCharIndex
         editCharIndex += 1
 
-        // Log each character being sent for debugging
+        // Log each character being sent (verbose level - very frequent)
         let unicodeValue = character.unicodeScalars.first?.value ?? 0
-        print("DEBUG CHAR[\(charIndex)]: Sending '\(character)' (U+\(String(format: "%04X", unicodeValue)))")
+        appLog("Edit char[\(charIndex)]: '\(character)' (U+\(String(format: "%04X", unicodeValue)))", level: .verbose)
 
         // Send the character (same as typing phase)
         sendCharacter(character)
+
+        // Temporarily set previousCharacter to editCharPreviousChar so extraDelay() uses the correct context
+        let savedPreviousChar = previousCharacter
+        previousCharacter = editCharPreviousChar
 
         // Calculate delay using the same extraDelay logic as typing phase
         let baseDelay = max(0.05, interCharacterDelay)
         let extra = extraDelay(afterTyping: character)
         let nextDelay = (baseDelay + extra) * editingDelayMultiplier
 
+        // Restore typing phase's previousCharacter and update edit phase's
+        previousCharacter = savedPreviousChar
         editCharPreviousChar = character
 
         // Schedule next character (mirrors typing phase)
@@ -1546,6 +1584,11 @@ final class TypingManager: NSObject, ObservableObject {
 
         typingWorkItem?.cancel()
         typingWorkItem = nil
+
+        // Also cancel edit character typing work item
+        editCharWorkItem?.cancel()
+        editCharWorkItem = nil
+        editCharCompletion = nil
 
         stopPeriodicFocusCheck()
 
@@ -1607,23 +1650,28 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
-    /// Aborts editing with an error message
-    private func abortEditingWithError(_ errorMessage: String) {
+    /// Aborts editing with a typed error
+    private func abortEditingWithError(_ error: EditingError) {
         typingWorkItem?.cancel()
         typingWorkItem = nil
 
+        // Cancel edit character typing work item
+        editCharWorkItem?.cancel()
+        editCharWorkItem = nil
+        editCharCompletion = nil
+
         stopPeriodicFocusCheck()
 
-        print("ERROR TypingManager: \(errorMessage)")
+        appLog("Editing aborted: \(error.localizedDescription)", level: .error)
 
         DispatchQueue.main.async {
             self.state = .idle
             self.isThinking = false
-            self.progressText = "Editing aborted due to error."
+            self.progressText = "Editing aborted. Use Cmd+Z to undo changes."
             self.progressFraction = Double(self.currentEditIndex) / Double(max(1, self.positionedEdits.count))
-
-            // Show detailed error in console/UI
-            NSLog("Editing aborted: \(errorMessage)")
+            self.lastEditingError = error
+            self.targetAppPID = nil
+            self.targetWindowTitle = nil
 
             // Clear editing state
             self.draft2Text = nil
