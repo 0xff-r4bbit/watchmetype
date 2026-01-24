@@ -10,7 +10,7 @@ import ApplicationServices
 import AppKit
 
 enum AccessibilityPermissionHelper {
-    /// Returns true if the app is alreasdy trusted for Accessibility.
+    /// Returns true if the app is already trusted for Accessibility.
     static var isTrusted: Bool {
         AXIsProcessTrusted()
     }
@@ -26,7 +26,7 @@ enum AccessibilityPermissionHelper {
         // If not trusted, macOS shows the “allow this app to control your computer” prompt
         // the first time. After that, the user must manage it in System Settings.
         let trusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
-        print("AXIsProcessTrustedWithOptions returned: \(trusted)")
+        appLog("AXIsProcessTrustedWithOptions returned: \(trusted)", level: .debug)
         if !trusted {
             // On newer macOS versions, the one-shot prompt may have already been shown
             // (and possibly dismissed). In that case, the only way to grant access is

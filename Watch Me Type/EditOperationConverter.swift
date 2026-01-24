@@ -413,7 +413,7 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
         }
     }
 
-    // Step 4: Sort by position descending, then by originalIndex ascending
+    // Step 3: Sort by position descending, then by originalIndex ascending
     // This ensures: (1) we work right-to-left, (2) same-position edits stay in order
     let sortedEdits = editsWithPositions.sorted {
         if $0.position != $1.position {

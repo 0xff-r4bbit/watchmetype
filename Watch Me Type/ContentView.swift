@@ -1,6 +1,68 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Native Text Editor with Proper Scroll Behavior
+
+struct NativeTextEditor: NSViewRepresentable {
+    @Binding var text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        let textView = NSTextView()
+
+        // Configure text view
+        textView.isRichText = false
+        textView.allowsUndo = true
+        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        textView.textColor = NSColor.textColor
+        textView.backgroundColor = .clear
+        textView.drawsBackground = false
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.autoresizingMask = [.width]
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.delegate = context.coordinator
+
+        // Configure scroll view - key settings for proper scroll indicator behavior
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true  // This is the key setting
+        scrollView.scrollerStyle = .overlay
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            text.wrappedValue = textView.string
+        }
+    }
+}
+
 enum DurationUnit: String, CaseIterable, Identifiable {
     case minutes
     case hours
@@ -235,9 +297,9 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
 
             ZStack(alignment: .topLeading) {
-                TextEditor(text: text)
+                NativeTextEditor(text: text)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(8)
-                    .scrollIndicators(.hidden)
 
                 if text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(placeholder)
@@ -247,7 +309,7 @@ struct ContentView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(NSColor.textBackgroundColor))
@@ -723,10 +785,6 @@ struct ContentView: View {
         }
     }
 
-    private var overlaySupportingText: String? {
-        return nil
-    }
-
     private var overlayPrimaryInstruction: String? {
         switch typingManager.state {
         case .typing, .editing:
@@ -1128,29 +1186,6 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + windowAdjustmentDebounce, execute: workItem)
     }
 
-    private func adjustWindowPositionForEditingMode() {
-        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
-        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
-
-        let currentFrame = window.frame
-        var newFrame = currentFrame
-
-        // If window extends past right edge, anchor it to the right edge
-        if newFrame.maxX > screenFrame.maxX {
-            newFrame.origin.x = screenFrame.maxX - newFrame.size.width - 20
-        }
-
-        // Ensure window stays within vertical bounds
-        if newFrame.maxY > screenFrame.maxY {
-            newFrame.origin.y = screenFrame.maxY - newFrame.size.height - 20
-        }
-        if newFrame.minY < screenFrame.minY {
-            newFrame.origin.y = screenFrame.minY + 20
-        }
-
-        window.setFrame(newFrame, display: true, animate: true)
-    }
-
     private func restoreNormalWindowFrame() {
         guard let normal = storedNormalWindowFrame else { return }
 
@@ -1359,64 +1394,6 @@ private func isHorizontalRule(_ line: String) -> Bool {
 
     let allowed = CharacterSet(charactersIn: "-_*—– ⸻")
     return trimmed.unicodeScalars.allSatisfy { allowed.contains($0) }
-}
-
-private func applySpellingNoise(to text: String) -> String {
-    var result = ""
-    var currentWord = ""
-    var wordCount = 0
-    var nextMistakeAt = Int.random(in: 8...12)
-
-    func flushWord() {
-        guard !currentWord.isEmpty else { return }
-
-        wordCount += 1
-        var mutated = currentWord
-
-        if wordCount >= nextMistakeAt {
-            if let index = mutated.indices.filter({ mutated[$0].isLetter }).randomElement() {
-                let original = mutated[index]
-                let replacement = randomNearbyLetter(matchingCaseOf: original)
-                mutated.replaceSubrange(index...index, with: [replacement])
-            }
-            wordCount = 0
-            nextMistakeAt = Int.random(in: 8...12)
-        }
-
-        result += mutated
-        currentWord = ""
-    }
-
-    for ch in text {
-        if ch.isLetter {
-            currentWord.append(ch)
-        } else {
-            flushWord()
-            result.append(ch)
-        }
-    }
-    flushWord()
-
-    return result
-}
-
-private func randomNearbyLetter(matchingCaseOf character: Character) -> Character {
-    let isUpper = character.isUppercase
-    let letters = Array("abcdefghijklmnopqrstuvwxyz")
-    let lower = Character(character.lowercased())
-    guard let index = letters.firstIndex(of: lower) else {
-        return character
-    }
-
-    let offsets = [-2, -1, 1, 2].shuffled()
-    for offset in offsets {
-        let newIndex = index + offset
-        if newIndex >= 0 && newIndex < letters.count {
-            let newChar = letters[newIndex]
-            return isUpper ? Character(String(newChar).uppercased()) : newChar
-        }
-    }
-    return character
 }
 
 private func replacingEmDashesWithCommas(in text: String) -> String {

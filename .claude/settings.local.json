@@ -6,7 +6,8 @@
       "Bash(swiftc:*)",
       "Bash(ls:*)",
       "Bash(cd:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(find:*)"
     ]
   }
 }

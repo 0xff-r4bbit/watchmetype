@@ -31,6 +31,12 @@
             "state" : "translated",
             "value" : "已完成 %lld%%"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%% 完成"
+          }
         }
       }
     },
@@ -43,6 +49,12 @@
             "state" : "translated",
             "value" : "%lld分钟"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld分鐘"
+          }
         }
       }
     },
@@ -53,12 +65,24 @@
             "state" : "translated",
             "value" : "平均"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "平均"
+          }
         }
       }
     },
     "Cancel" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消"
@@ -75,6 +99,12 @@
             "state" : "translated",
             "value" : "检查更新…"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢查更新..."
+          }
         }
       }
     },
@@ -84,6 +114,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自定编辑时间"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂編輯時間"
           }
         }
       }
@@ -95,12 +131,24 @@
             "state" : "translated",
             "value" : "自定打字时间"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂打字時間"
+          }
         }
       }
     },
     "Done" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
@@ -115,6 +163,12 @@
             "state" : "translated",
             "value" : "例如： 5"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譬如：5"
+          }
         }
       }
     },
@@ -124,6 +178,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "例如： 10"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譬如：10"
           }
         }
       }
@@ -135,6 +195,12 @@
             "state" : "translated",
             "value" : "至少编辑"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "至少編輯"
+          }
         }
       }
     },
@@ -144,6 +210,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编辑错误"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯錯誤"
           }
         }
       }
@@ -157,6 +229,12 @@
             "state" : "translated",
             "value" : "预计：至少"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "預計：至少"
+          }
         }
       }
     },
@@ -169,6 +247,12 @@
             "state" : "translated",
             "value" : "预计：至少 —"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "預計：至少 —"
+          }
         }
       }
     },
@@ -178,6 +262,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "如果这帮助到你了，请考虑支持并分享这个 app。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果這幫助到你了，請考慮支持並分享這個 app。"
           }
         }
       }
@@ -189,12 +279,24 @@
             "state" : "translated",
             "value" : "再来一次"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再來一次"
+          }
         }
       }
     },
     "Link copied!" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接已复制！"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "链接已复制！"
@@ -221,6 +323,12 @@
             "state" : "translated",
             "value" : "打开 Ko-fi"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開 Ko-fi"
+          }
         }
       }
     },
@@ -231,7 +339,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请考虑支持这个 app"
+            "value" : "请支持这个 app"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請支持這個 app"
           }
         }
       }
@@ -243,6 +357,12 @@
             "state" : "translated",
             "value" : "处理"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "處理"
+          }
         }
       }
     },
@@ -252,6 +372,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除空行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除空行"
           }
         }
       }
@@ -263,6 +389,12 @@
             "state" : "translated",
             "value" : "删除项目符号（- …）"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除項目符號（- …）"
+          }
         }
       }
     },
@@ -272,6 +404,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除表情符号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除表情符號"
           }
         }
       }
@@ -283,6 +421,12 @@
             "state" : "translated",
             "value" : "删除分隔线"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除分隔線"
+          }
         }
       }
     },
@@ -293,12 +437,24 @@
             "state" : "translated",
             "value" : "将破折号替换为逗号"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將破折號改成逗號"
+          }
         }
       }
     },
     "Share this app." : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享这个 app"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享这个 app"
@@ -313,6 +469,12 @@
             "state" : "translated",
             "value" : "开始"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開始"
+          }
         }
       }
     },
@@ -326,12 +488,24 @@
             "state" : "translated",
             "value" : "%lld 秒后开始"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 秒後開始"
+          }
         }
       }
     },
     "Stop" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止"
@@ -346,6 +520,12 @@
             "state" : "translated",
             "value" : "请切换到你想要我打字的地方。"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请切换到你想要我打字的地方。"
+          }
         }
       }
     },
@@ -355,6 +535,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "目标速度：%lld 字/分钟"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目標速度：￼ 字/分鐘"
           }
         }
       }
@@ -366,12 +552,24 @@
             "state" : "translated",
             "value" : "我会先输入第一版草稿，然后根据第二版进行修改。"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我會先輸入第一版草稿，然後根據第二版進行修改。"
+          }
         }
       }
     },
     "type for at least" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打至少"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "打至少"
@@ -391,12 +589,24 @@
             "state" : "translated",
             "value" : "微信支付"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "微信支付"
+          }
         }
       }
     },
     "􀐳 Typing Speed" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "􀐳 打字速度"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "􀐳 打字速度"
@@ -431,12 +641,24 @@
             "state" : "translated",
             "value" : "􁚝 编辑阶段"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "􁚝 編輯階段"
+          }
         }
       }
     },
     "􂺹  Clean-Up" : {
       "localizations" : {
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "􂺹  清理"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "􂺹  清理"

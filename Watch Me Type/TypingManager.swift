@@ -122,15 +122,17 @@ final class TypingManager: NSObject, ObservableObject {
     private var editCharWorkItem: DispatchWorkItem?      // Cancellable work item for edit typing
     private var editCharPreviousChar: Character?         // Previous character for extra delay calculation
 
-    // Editing delay configuration - uses slower delays universally to work with all editors
-    // including web-based editors like Google Docs
-    private var editingDelayMultiplier: Double = 1.0     // Set to 1.0 to test if still needed (was 5.0 for web editor reliability)
+    // Editing delay configuration - multiplier for editing phase delays
+    private var editingDelayMultiplier: Double = 1.0
 
     // Periodic focus checker (safety net for missed window switches)
     private var focusCheckTimer: Timer?
 
     // Tracks which state we were in before pausing (to resume correctly)
     private var stateBeforePause: TypingState?
+
+    // Sleep prevention - prevents system idle sleep during active typing/editing
+    private var sleepPreventionActivity: NSObjectProtocol?
 
     override init() {
         super.init()
@@ -151,6 +153,11 @@ final class TypingManager: NSObject, ObservableObject {
 
         if let source = escRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+
+        // Clean up sleep prevention if still active
+        if let activity = sleepPreventionActivity {
+            ProcessInfo.processInfo.endActivity(activity)
         }
     }
     
@@ -259,6 +266,7 @@ final class TypingManager: NSObject, ObservableObject {
         editCharsToType = []
 
         stopPeriodicFocusCheck()
+        endSleepPrevention()
 
         state = .idle
         countdownRemaining = 0
@@ -299,6 +307,9 @@ final class TypingManager: NSObject, ObservableObject {
         state = .typing
         progressText = "Typing in progress…"
         isThinking = false
+
+        // Prevent system idle sleep during active typing
+        beginSleepPrevention()
 
         // Start periodic focus check (every 0.5 seconds) as safety net
         startPeriodicFocusCheck()
@@ -406,6 +417,7 @@ final class TypingManager: NSObject, ObservableObject {
             }
         } else {
             // Normal single-draft completion
+            endSleepPrevention()
             DispatchQueue.main.async {
                 if let start = self.typingStartDate {
                     self.lastRunDuration = Date().timeIntervalSince(start)
@@ -548,6 +560,26 @@ final class TypingManager: NSObject, ObservableObject {
     private func stopPeriodicFocusCheck() {
         focusCheckTimer?.invalidate()
         focusCheckTimer = nil
+    }
+
+    // MARK: - Sleep Prevention
+
+    /// Begins preventing system and display idle sleep during active typing/editing
+    private func beginSleepPrevention() {
+        guard sleepPreventionActivity == nil else { return }
+        sleepPreventionActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled],
+            reason: "Actively typing or editing text"
+        )
+        appLog("Sleep prevention started", level: .debug)
+    }
+
+    /// Ends sleep prevention, allowing the system to sleep normally
+    private func endSleepPrevention() {
+        guard let activity = sleepPreventionActivity else { return }
+        ProcessInfo.processInfo.endActivity(activity)
+        sleepPreventionActivity = nil
+        appLog("Sleep prevention ended", level: .debug)
     }
 
     /// Gets the title of the currently focused window using Accessibility API
@@ -905,27 +937,6 @@ final class TypingManager: NSObject, ObservableObject {
         keyUp.post(tap: .cghidEventTap)
     }
 
-    // MARK: - Clipboard Operations
-
-    /// Sends Cmd+C to copy selected text to clipboard
-    private func sendCopyCommand() {
-        let source = CGEventSource(stateID: .hidSystemState)
-        let keyCode: CGKeyCode = 0x08  // 'C' key
-
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
-            return
-        }
-
-        // Set Command modifier flag
-        keyDown.flags = .maskCommand
-
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
-    }
-
-    // Note: sendFindCommand removed - backwards editing doesn't use Find navigation
-
     private func sendReturnKey() {
         let source = CGEventSource(stateID: .hidSystemState)
         let returnKeyCode: CGKeyCode = 0x24  // Return key
@@ -948,19 +959,6 @@ final class TypingManager: NSObject, ObservableObject {
         }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
-    }
-
-    /// Reads current text from system clipboard
-    private func readClipboard() -> String? {
-        let pasteboard = NSPasteboard.general
-        return pasteboard.string(forType: .string)
-    }
-
-    /// Writes text to system clipboard (for testing or future use)
-    private func writeClipboard(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
     }
 
     private func sendArrowKey(_ direction: ArrowDirection, withModifier modifier: KeyModifier? = nil) {
@@ -1203,7 +1201,7 @@ final class TypingManager: NSObject, ObservableObject {
         let postInsertDelay = 0.3 * editingDelayMultiplier
         let baseCharDelay = max(0.05, interCharacterDelay) * editingDelayMultiplier
 
-        var simulatedCursorPos = textToType.count // Start at end of draft1
+        var simulatedCursorPos = textToType.count // Start cursor at end of typed text (draft1)
 
         for edit in positionedEdits {
             // Navigation time
@@ -1619,6 +1617,7 @@ final class TypingManager: NSObject, ObservableObject {
         typingWorkItem = nil
 
         stopPeriodicFocusCheck()
+        endSleepPrevention()
 
         DispatchQueue.main.async {
             // Record editing phase duration
@@ -1661,6 +1660,7 @@ final class TypingManager: NSObject, ObservableObject {
         editCharCompletion = nil
 
         stopPeriodicFocusCheck()
+        endSleepPrevention()
 
         appLog("Editing aborted: \(error.localizedDescription)", level: .error)
 
