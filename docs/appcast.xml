@@ -3,6 +3,20 @@
     <channel>
         <title>Watch Me Type</title>
         <item>
+            <title>2.0.3</title>
+            <pubDate>Sat, 31 Jan 2026 22:49:20 -0800</pubDate>
+            <sparkle:version>203</sparkle:version>
+            <sparkle:shortVersionString>2.0.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.3/WatchMeType-2.0.3.dmg" length="2252869" type="application/octet-stream" sparkle:edSignature="mM4VEnA+Ze8LGUQpUfYVFrN/UCefMCDuxDPaH9Y5zVGwZkoExcOqZ9shZr388VP+Km0uswRcdbRvPp/LVXK5Bg=="/>
+            <sparkle:deltas>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type203-202.delta" sparkle:deltaFrom="202" length="39862" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="hQiWzKJch2l6/eTBJi+Mz+HKEGexcxwRM20GaqZ5ySWe5RhbB2n9PkEWLDOW7ZxZ8CH329jBFwx0vmzw1mNODg=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type203-201.delta" sparkle:deltaFrom="201" length="84634" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="vov3HREoq5BzCSZ5ogn0HTAEn+xrP9/bvNzCtECGao58oehH3gV2niCX5nB0MnTRV7PilAgQo3kqcuf3qHkfAw=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type203-200.delta" sparkle:deltaFrom="200" length="91114" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="7hMqT21nUyBOy3u8WFpb2pT70iot8T96p8tZAE3DDHG3vQG8W0/u/UJB5T5/ctwHv9miwfij9UwBXePkTUaDDA=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type203-1.delta" sparkle:deltaFrom="1" length="537786" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="yrRxryD26Ey4aDA0aOhTd+BQ3SlhRvy3JA1jyUOpZGUTBbTPlu8seRxW2/OgYfPZq+sBI2xzvaUyVkJGPSgVAA=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>2.0.2</title>
             <pubDate>Sat, 24 Jan 2026 13:03:57 -0800</pubDate>
             <sparkle:version>202</sparkle:version>
@@ -25,17 +39,6 @@
             <sparkle:deltas>
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type201-200.delta" sparkle:deltaFrom="200" length="58190" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="rc8WPVQ44J2104fmpm0tiXX1bnSa6F8F34FtJrlCtsDB9t8wMmSwERQmkmGMACbaN8QvFubE0PMpvdwyAEdqAg=="/>
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type201-1.delta" sparkle:deltaFrom="1" length="531422" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Sl6rVkMvdUWzzq2RuNKCaSR9BnltiCacRvhKpFlT54PUcx05Uyo1OFJAFgpx9Ir8r9CwE3WmYkddgZn/zceXBQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>2.0.0</title>
-            <pubDate>Fri, 23 Jan 2026 21:21:30 -0800</pubDate>
-            <sparkle:version>200</sparkle:version>
-            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.0/WatchMeType-2.0.0.dmg" length="2250024" type="application/octet-stream" sparkle:edSignature="/fKV4d9YP3uJIi9AbNtcSSx2eaNaTlC7ESu50v+7LuMroeFkEsSRR40s7BynE+31FlZKWFfOWaJRpKp96tFgBQ=="/>
-            <sparkle:deltas>
-                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type200-1.delta" sparkle:deltaFrom="1" length="528434" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="oPezc2CaJha8SDroywwhPCJ5eSzo4kVK51O9qfmoakLJgUfI+sgN1uAsxzTL6V6SvM2C0kwIp6odeL70MGVACg=="/>
             </sparkle:deltas>
         </item>
     </channel>
