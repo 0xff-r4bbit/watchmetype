@@ -10,9 +10,9 @@ enum EditOperation {
     case navigateWordLeft(count: Int)     // Option+← arrow key (word jump)
     case selectLeft(count: Int)           // Shift+← arrow (select backwards)
     case selectRight(count: Int)          // Shift+→ arrow (select forwards)
-    case delete(count: Int)               // Backspace/Delete key
+    case delete(count: Int, expectedText: String)  // Backspace/Delete key with expected text for verification
     case insert(text: String)             // Type new text
-    case replace(oldCount: Int, newText: String)  // Atomic replace: select old, delete, insert new
+    case replace(oldCount: Int, newText: String, expectedOldText: String)  // Atomic replace with expected text for verification
     case pause(duration: TimeInterval)    // Thinking pause
 }
 
@@ -361,7 +361,11 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
 
             // Create replace or delete operation
             if !insertText.isEmpty {
-                let replaceOp = EditOperation.replace(oldCount: deleteCount, newText: insertText)
+                let replaceOp = EditOperation.replace(
+                    oldCount: deleteCount,
+                    newText: insertText,
+                    expectedOldText: oldText
+                )
                 editsWithPositions.append(EditWithPosition(
                     operation: replaceOp,
                     position: currentPosition,
@@ -370,7 +374,10 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
                 appLog("Replace at position \(currentPosition): \(deleteCount) chars → \(insertText.count) chars", level: .verbose)
             } else {
                 // Just delete, no insert
-                let deleteOp = EditOperation.delete(count: deleteCount)
+                let deleteOp = EditOperation.delete(
+                    count: deleteCount,
+                    expectedText: oldText
+                )
                 editsWithPositions.append(EditWithPosition(
                     operation: deleteOp,
                     position: currentPosition,
@@ -464,7 +471,7 @@ func convertDraftsToEditOperations(draft1: String, draft2: String) -> [EditOpera
         case .delete(let word):
             // Simply delete the word (backspace each character)
             // Don't try to merge with following inserts - keep it simple
-            operations.append(.delete(count: word.count))
+            operations.append(.delete(count: word.count, expectedText: word))
             i += 1
 
         case .insert(let word):
@@ -533,17 +540,18 @@ func optimizeOperations(_ operations: [EditOperation]) -> [EditOperation] {
         }
 
         // Merge consecutive delete operations
-        if case .delete(var count) = op {
+        if case .delete(var count, var expectedText) = op {
             var j = i + 1
             while j < operations.count {
-                if case .delete(let nextCount) = operations[j] {
+                if case .delete(let nextCount, let nextExpected) = operations[j] {
                     count += nextCount
+                    expectedText += nextExpected
                     j += 1
                 } else {
                     break
                 }
             }
-            optimized.append(.delete(count: count))
+            optimized.append(.delete(count: count, expectedText: expectedText))
             i = j
             continue
         }
