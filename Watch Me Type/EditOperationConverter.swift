@@ -344,21 +344,18 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
             i += 1
 
         case .delete(let oldText):
-            // Group consecutive deletes and inserts into a single replace operation
-            // Each logical unit (sentence or word group) produces one delete+insert pair
-            // NOTE: We intentionally do NOT merge consecutive deletes anymore to keep
-            // deletion granularity human-like (avoid wiping multiple sentences at once).
+            // Pair this delete with at most ONE immediately following insert
+            // This fixes a bug where LCS can produce [delete, delete, insert, insert]
+            // and the old code would incorrectly group all inserts with the last delete
             let deleteCount = oldText.count
             var insertText = ""
             var j = i + 1
 
-            // Now accumulate any consecutive inserts immediately following
-            while j < editScript.count {
+            // Only take ONE insert immediately following this delete
+            if j < editScript.count {
                 if case .insert(let text) = editScript[j] {
-                    insertText += text
+                    insertText = text
                     j += 1
-                } else {
-                    break
                 }
             }
 
@@ -387,7 +384,9 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
             i = j
 
         case .insert(let text):
-            // Group consecutive inserts at the same position into a single insert
+            // Accumulate consecutive inserts at the same position into a single insert
+            // This is correct because multiple inserts at the same position represent
+            // new content being added and must be grouped to maintain order
             var insertText = text
             var j = i + 1
 
