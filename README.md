@@ -1,23 +1,21 @@
 # Watch Me Type
 
-<p align="center">
-  <strong>Warning:</strong> Turn off autocorrect before typing with this app. Autocorrect can interfere with realistic drafting, especially when your draft includes intentional grammar or spelling mistakes. Disable it in
-  <a href="https://support.google.com/docs/answer/12022089?hl=en&co=GENIE.Platform%3DDesktop">Google Docs</a>
-  and
-  <a href="https://support.microsoft.com/en-us/office/turn-autocorrect-on-or-off-in-word-9f5a0684-05f6-4510-b419-8f0034caefe4">Microsoft Word</a>.
-</p>
-
-<p align="center">
-  <video autoplay loop muted playsinline>
-    <source src="https://nicojan.com/assets/thumbnails/watchmetype.webm" type="video/webm">
-    <source src="https://nicojan.com/assets/thumbnails/watchmetype.mp4" type="video/mp4">
-    Your browser does not support the video tag.
-  </video>
-</p>
+<table align="center">
+  <tr>
+    <td>
+      <p align="center"><strong>⚠️ Warning ⚠️</strong></p>
+      <p>Turn off autocorrect before typing with this app. Autocorrect can interfere with realistic drafting, especially when your draft includes intentional grammar or spelling mistakes. Disable it in <a href="https://support.google.com/docs/answer/12022089?hl=en&co=GENIE.Platform%3DDesktop">Google Docs</a> and <a href="https://support.microsoft.com/en-us/office/turn-autocorrect-on-or-off-in-word-9f5a0684-05f6-4510-b419-8f0034caefe4">Microsoft Word</a>.</p>
+    </td>
+  </tr>
+</table>
 
 _because revision history is not learning_
 
 Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft or stage a Draft 1 → Draft 2 revision, locking to the chosen window, auto-pausing on focus changes, and running for the exact duration you need.
+
+<p align="center">
+  <img src="https://nicojan.com/assets/thumbnails/watchmetype.png" alt="Watch Me Type in action">
+</p>
 
 ## Purpose
 
