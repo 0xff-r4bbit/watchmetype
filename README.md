@@ -2,7 +2,7 @@
   <tr>
     <td>
       <p align="center"><strong>⚠️ Warning ⚠️</strong></p>
-      <p>Turn off autocorrect before typing with this app. Autocorrect can interfere with realistic drafting, especially when your draft includes intentional grammar or spelling mistakes. Disable it in <a href="https://support.google.com/docs/answer/12022089?hl=en&co=GENIE.Platform%3DDesktop">Google Docs</a> and <a href="https://support.microsoft.com/en-us/office/turn-autocorrect-on-or-off-in-word-9f5a0684-05f6-4510-b419-8f0034caefe4">Microsoft Word</a>.</p>
+      <p>Turn off autocorrect before typing with this app. Autocorrect can interfere with realistic drafting, especially when your draft includes intentional grammar or spelling mistakes. Here's how you can disable it in <a href="https://support.google.com/docs/answer/12022089?hl=en&co=GENIE.Platform%3DDesktop">Google Docs</a> and <a href="https://support.microsoft.com/en-us/office/turn-autocorrect-on-or-off-in-word-9f5a0684-05f6-4510-b419-8f0034caefe4">Microsoft Word</a>.</p>
     </td>
   </tr>
 </table>
@@ -63,7 +63,7 @@ The solution is not better detection; it's building actual relationships with st
 - CoreGraphics (CGEvent) for keyboard simulation
 - macOS Accessibility APIs for focus tracking and window control
 - Sparkle for in-app updates
-- Centralized logging for debugging sessions
+- centralized logging for debugging sessions
 
 ## Installation
 
@@ -75,12 +75,11 @@ The solution is not better detection; it's building actual relationships with st
 
 ## Usage Notes
 
-- While the app is typing, the device is effectively unavailable; switching apps auto-pauses until you return.
+- While the app is typing, the device is effectively unavailable; switching apps auto-pauses until you return. I would recommend running this in a VM.
 - Provide Draft 2 to simulate a realistic revision of Draft 1; leave it blank for a single-draft run.
 - Use custom durations if you need a session to last a minimum amount of time; otherwise the app estimates based on WPM and text length.
 - In Draft 2 editing mode, focus/window changes abort editing to avoid writing in the wrong place; if needed, use Cmd+Z in your target app.
 - ESC pauses during typing, but stops editing sessions.
-- Do not complete an entire piece of writing in a single session if the goal is a realistic revision history.
 
 ### Text Cleanup Behavior
 
