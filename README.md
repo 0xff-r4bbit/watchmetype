@@ -1,5 +1,20 @@
 # Watch Me Type
 
+<p align="center">
+  <strong>Warning:</strong> Turn off autocorrect before typing with this app. Autocorrect can interfere with realistic drafting, especially when your draft includes intentional grammar or spelling mistakes. Disable it in
+  <a href="https://support.google.com/docs/answer/12022089?hl=en&co=GENIE.Platform%3DDesktop">Google Docs</a>
+  and
+  <a href="https://support.microsoft.com/en-us/office/turn-autocorrect-on-or-off-in-word-9f5a0684-05f6-4510-b419-8f0034caefe4">Microsoft Word</a>.
+</p>
+
+<p align="center">
+  <video autoplay loop muted playsinline>
+    <source src="https://nicojan.com/assets/thumbnails/watchmetype.webm" type="video/webm">
+    <source src="https://nicojan.com/assets/thumbnails/watchmetype.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+</p>
+
 _because revision history is not learning_
 
 Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft or stage a Draft 1 → Draft 2 revision, locking to the chosen window, auto-pausing on focus changes, and running for the exact duration you need.
@@ -79,25 +94,6 @@ For each section, produce two exemplars:
 
 The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in "signs"-of-ai-writing.jpeg”.
 ```
-
-## Screenshots
-
-<p align="center">
-    <img src="assets/screenshots/main.png" alt="main window"><br>
-    <em>main app window</em>
-</p><br>
-<p align="center">
-    <img src="assets/screenshots/accessibility.png" alt="macOS Accessibility permission prompt"><br>
-    <em>macOS Accessibility permission prompt</em>
-</p><br>
-<p align="center">
-    <img src="assets/screenshots/typing.png" alt="typing in progress"><br>
-    <em>typing in progress</em>
-</p><br>
-<p align="center">
-    <img src="assets/screenshots/completed.png" alt="completed session"><br>
-    <em>completed session</em>
-</p>
 
 ## Contributing
 
