@@ -1,5 +1,3 @@
-# Watch Me Type
-
 <table align="center">
   <tr>
     <td>
@@ -8,6 +6,8 @@
     </td>
   </tr>
 </table>
+
+# Watch Me Type
 
 _because revision history is not learning_
 
@@ -91,18 +91,6 @@ The solution is not better detection; it's building actual relationships with st
 ### Effective Use
 
 This app works best as part of a longer writing process. Generate drafts _elsewhere_, then use Watch Me Type to reproduce how writing normally appears over time (Draft 1) and, if needed, to stage a believable edit into Draft 2.
-
-When generating drafts, use a prompt like the one below. Replace bracketed text as needed.
-
-```
-Create a plan for the sections required for this [assignment / project / journal]. We will complete the sections one by one.
-
-For each section, produce two exemplars:
-- one written in B2-level [Canadian / American / British] English
-- one written in C2-level English
-
-The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and linguistic patterns commonly associated with AI-generated writing (see `assets/signs-of-ai-writing.jpeg`).
-```
 
 ## Build from Source
 
