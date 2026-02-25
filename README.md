@@ -11,7 +11,7 @@
 
 _because revision history is not learning_
 
-Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft or stage a Draft 1 → Draft 2 revision, locking to the chosen window, auto-pausing on focus changes, and running for the exact duration you need.
+Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft or stage a Draft 1 → Draft 2 revision, locking to the chosen window, auto-pausing on focus changes, and running for at least the duration you need.
 
 ![Watch Me Type in action](assets/thumbnail.png)
 
@@ -43,13 +43,18 @@ The solution is not better detection; it's building actual relationships with st
 
 - simulates human typing with adjustable 40–120 WPM, thinking pauses, comma/sentence/paragraph delays, and occasional mistakes with backspaces
 - two modes: single-draft typing or two-phase draft1→draft2 editing that rewrites the first draft with cursor-accurate edits and navigation delays
-- duration control: auto-estimated or custom minimum typing/editing times with live progress tracking and a 10-second countdown
-- text clean-up toggles: remove blank lines/emojis/bullets/horizontal rules, replace em-dashes, collapse extra spaces, and fix spacing before punctuation
-- focus-aware: locks to the chosen window, auto-pauses on app switch, auto-resumes when you return, overlays for countdown/typing/thinking/editing/paused/complete, minimizes the main window while running
+- duration control: auto-estimated or custom minimum typing/editing time targets ("at least") with live progress tracking and a 10-second countdown
+- text clean-up tools: remove blank lines/emojis/bullets/horizontal rules, replace em-dashes, and normalize spacing before/within punctuation when processed
+- focus-aware: locks to the chosen app/window; typing auto-pauses and auto-resumes when focus returns; editing aborts on focus loss for safety; overlays for countdown/typing/thinking/editing/paused/complete; compact always-on-top runtime window
 - completion screen: shows typing/editing/total duration, donation options, share link, and quick reset for another run
-- compatible everywhere: types into any macOS text field (Docs, Word, Notes, IDEs, browsers); prevents sleep during sessions; ESC pauses/stops
-- privacy & localization: no accounts or tracking; English plus Chinese localization
+- compatible everywhere: types into any macOS text field (Docs, Word, Notes, IDEs, browsers); prevents sleep during sessions; ESC pauses typing and stops editing
+- privacy & localization: no accounts or tracking; English, Simplified Chinese, and Traditional Chinese localization
 - updates & stack: Sparkle auto-updates; built with SwiftUI + AppKit (NSTextView), CoreGraphics CGEvent keyboard simulation, Accessibility APIs, and centralized logging
+
+## Requirements
+
+- macOS 14.6 or newer
+- Accessibility permission enabled for Watch Me Type (required for keyboard simulation and focus tracking)
 
 ## Built With
 
@@ -65,7 +70,7 @@ The solution is not better detection; it's building actual relationships with st
 1. Download the DMG from [the latest release](https://github.com/0xff-r4bbit/watchmetype/releases/).
 2. Drag **Watch Me Type** into the **Applications** folder.
 3. Launch the app.
-4. When macOS asks, grant Accessibility access (required to type for you).
+4. In the in-app prompt, choose **Continue** and grant Accessibility access in System Settings when prompted.
 5. Sparkle will check for updates automatically after launch; manual “Check for Updates” is in the menu.
 
 ## Usage Notes
@@ -73,7 +78,15 @@ The solution is not better detection; it's building actual relationships with st
 - While the app is typing, the device is effectively unavailable; switching apps auto-pauses until you return.
 - Provide Draft 2 to simulate a realistic revision of Draft 1; leave it blank for a single-draft run.
 - Use custom durations if you need a session to last a minimum amount of time; otherwise the app estimates based on WPM and text length.
+- In Draft 2 editing mode, focus/window changes abort editing to avoid writing in the wrong place; if needed, use Cmd+Z in your target app.
+- ESC pauses during typing, but stops editing sessions.
 - Do not complete an entire piece of writing in a single session if the goal is a realistic revision history.
+
+### Text Cleanup Behavior
+
+- Click **Process** to apply cleanup to Draft 1 and (if present) Draft 2.
+- Toggle-controlled cleanup includes removing blank lines, emojis, horizontal rules, bullet prefixes, and replacing em dashes with commas.
+- Space normalization (collapsing repeated spaces and removing spaces before punctuation) is always applied during processing.
 
 ### Effective Use
 
@@ -88,7 +101,19 @@ For each section, produce two exemplars:
 - one written in B2-level [Canadian / American / British] English
 - one written in C2-level English
 
-The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and other linguistic patterns and features identified in AI-generated writing, as detailed in "signs"-of-ai-writing.jpeg”.
+The B2-level draft should include grammar and usage errors typical of a B2-level English speaker. Avoid stylistic and linguistic patterns commonly associated with AI-generated writing (see `assets/signs-of-ai-writing.jpeg`).
+```
+
+## Build from Source
+
+```bash
+xcodebuild -project "Watch Me Type.xcodeproj" -scheme "Watch Me Type" -destination 'platform=macOS' build
+```
+
+## Run Tests
+
+```bash
+xcodebuild -project "Watch Me Type.xcodeproj" -scheme "Watch Me Type" -destination 'platform=macOS' test
 ```
 
 ## Contributing
@@ -107,4 +132,4 @@ You are free to view, use, and modify the source code for personal and education
 
 The source is shared to support transparency, learning, and community discussion, not to enable resale or unauthorised distribution.
 
-For details, see [licence.md](licence.md).
+For details, see [LICENCE.md](LICENCE.md).
