@@ -13,9 +13,7 @@ _because revision history is not learning_
 
 Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft or stage a Draft 1 → Draft 2 revision, locking to the chosen window, auto-pausing on focus changes, and running for the exact duration you need.
 
-<p align="center">
-  <img src="https://nicojan.com/assets/thumbnails/watchmetype.png" alt="Watch Me Type in action">
-</p>
+![Watch Me Type in action](assets/thumbnail.png)
 
 ## Purpose
 
