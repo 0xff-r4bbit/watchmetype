@@ -3,6 +3,21 @@
     <channel>
         <title>Watch Me Type</title>
         <item>
+            <title>2.0.6</title>
+            <pubDate>Fri, 27 Feb 2026 16:11:47 -0800</pubDate>
+            <sparkle:version>206</sparkle:version>
+            <sparkle:shortVersionString>2.0.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.6/WatchMeType.dmg" length="2282630" type="application/octet-stream" sparkle:edSignature="wWpfzCMVB1C4qE+JIWpXchHFdQW3wcCGHPLKcdsmKEWAcv5u1HD1RQKfFR2XyclzOhyQyQ30Z67IfR7VPTugBA=="/>
+            <sparkle:deltas>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type206-203.delta" sparkle:deltaFrom="203" length="126370" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860560" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ynBJLciCVbEefXOuWW04EDGxK02ylaxZOTeigdjqOGsZz1n3dSngEySUzW3y8qmT6lKsq5FDGsF2D1A66qrUBw=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type206-202.delta" sparkle:deltaFrom="202" length="129874" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="xtMqVTPY3hXxQQ6mzQwFywA7N/DaXWTs9xdl6Nq/nyKehLKZUgtAJxvQMMcneffAjonxzvh059la8fUbvNHWCQ=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type206-201.delta" sparkle:deltaFrom="201" length="145214" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="tMdwHctIu8lGkISwM4EEyV3B2U7ZJre3TErRE5AChRPYQCRD2MYjM5eMkAEy7Wg3jTwx1q3kcq5b4Ve+aadUAQ=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type206-200.delta" sparkle:deltaFrom="200" length="148310" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="RGW+i+GXJEAcyHUjNJWwdgodFJb7x4WbXLAdXtG9CNlxO8Jy149QxUHsHavD7qfyDopi7zFZDGiee3FoRlu1Cg=="/>
+                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type206-1.delta" sparkle:deltaFrom="1" length="563114" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="IcVP2otriDH+f8ehmDc7X3Gcs+ZFIYqFHCD6khJLQLf67O2IeJ5hiUee+p+FNobXjs2U9nyKoyx+nJqeghw9CQ=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>2.0.3</title>
             <pubDate>Sat, 31 Jan 2026 22:49:20 -0800</pubDate>
             <sparkle:version>203</sparkle:version>
@@ -27,18 +42,6 @@
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type202-201.delta" sparkle:deltaFrom="201" length="80722" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="FkqfjxRCItXmE8umw9qEuBOpzww5cGxptJvKE1jZ5TUpmswGrDVNosNwCee24uRm9cTvOBSOO4sQqGehqaKxCQ=="/>
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type202-200.delta" sparkle:deltaFrom="200" length="87318" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="OnaEQB+4cfbSCG2p7E2zlrB2sU+nxOLx1ovGNAlAcvDa6HM4U2Gyj/KQoGnpoo8AYZQnfQsHC7CTRz3Avc5fDw=="/>
                 <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type202-1.delta" sparkle:deltaFrom="1" length="537678" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="iud0+/7Llbc7aavgtiXdkpgQSllWqLB/cjZSrSMTBRLhyfv/+6gI1yRG9jkCuWeuJh97QbLZIhyU7PP1e6ZFCQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>2.0.1</title>
-            <pubDate>Fri, 23 Jan 2026 23:17:52 -0800</pubDate>
-            <sparkle:version>201</sparkle:version>
-            <sparkle:shortVersionString>2.0.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v2.0.1/WatchMeType-2.0.1.dmg" length="2253198" type="application/octet-stream" sparkle:edSignature="3hRcDmuHOYpAA14mqjYeDM1pKLTcvCQVR3D1gBrsTwHFI+0fX53zSvjYMUJg/fWwRkXTbJ4+SxCOrcJxkQXKCg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type201-200.delta" sparkle:deltaFrom="200" length="58190" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="862896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="rc8WPVQ44J2104fmpm0tiXX1bnSa6F8F34FtJrlCtsDB9t8wMmSwERQmkmGMACbaN8QvFubE0PMpvdwyAEdqAg=="/>
-                <enclosure url="https://0xff-r4bbit.github.io/watchmetype/Watch%20Me%20Type201-1.delta" sparkle:deltaFrom="1" length="531422" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860896" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Sl6rVkMvdUWzzq2RuNKCaSR9BnltiCacRvhKpFlT54PUcx05Uyo1OFJAFgpx9Ir8r9CwE3WmYkddgZn/zceXBQ=="/>
             </sparkle:deltas>
         </item>
     </channel>
