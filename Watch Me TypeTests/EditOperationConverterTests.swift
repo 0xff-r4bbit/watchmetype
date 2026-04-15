@@ -311,6 +311,82 @@ final class EditOperationConverterTests: XCTestCase {
         }
     }
 
+    // MARK: - Left-to-Right Edit Application Tests
+
+    func testLeftToRightEditApplicationSimpleReplace() {
+        let draft1 = "The quick brown fox"
+        let draft2 = "The slow brown cat"
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: draft1, edits: edits)
+        XCTAssertEqual(result, draft2, "Left-to-right edits should produce draft2")
+    }
+
+    func testLeftToRightEditApplicationWithLengthChange() {
+        let draft1 = "The quick brown fox jumps over the lazy dog."
+        let draft2 = "A fast brown fox leaps over a lazy dog."
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: draft1, edits: edits)
+        XCTAssertEqual(result, draft2, "Left-to-right edits with length changes should produce draft2")
+    }
+
+    func testLeftToRightEditApplicationInsertOnly() {
+        let draft1 = "Hello"
+        let draft2 = "Hello world"
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: draft1, edits: edits)
+        XCTAssertEqual(result, draft2)
+    }
+
+    func testLeftToRightEditApplicationDeleteOnly() {
+        let draft1 = "Hello world"
+        let draft2 = "Hello"
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: draft1, edits: edits)
+        XCTAssertEqual(result, draft2)
+    }
+
+    func testLeftToRightEditApplicationMultipleSentences() {
+        let draft1 = "First sentence. Second sentence. Third sentence."
+        let draft2 = "Opening line. Second sentence. Final thought."
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: draft1, edits: edits)
+        XCTAssertEqual(result, draft2)
+    }
+
+    func testLeftToRightEditApplicationIdentical() {
+        let text = "No changes needed."
+        let edits = convertDraftsToPositionedEdits(draft1: text, draft2: text, direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: text, edits: edits)
+        XCTAssertEqual(result, text)
+    }
+
+    func testLeftToRightEditApplicationEmptyToText() {
+        let edits = convertDraftsToPositionedEdits(draft1: "", draft2: "Hello", direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: "", edits: edits)
+        XCTAssertEqual(result, "Hello")
+    }
+
+    func testLeftToRightEditApplicationTextToEmpty() {
+        let edits = convertDraftsToPositionedEdits(draft1: "Hello", draft2: "", direction: .leftToRight)
+        let result = applyEditsLeftToRight(to: "Hello", edits: edits)
+        XCTAssertEqual(result, "")
+    }
+
+    func testLeftToRightAndRightToLeftProduceSameResult() {
+        let draft1 = "The quick brown fox jumps over the lazy dog."
+        let draft2 = "A fast brown fox leaps over a lazy dog."
+
+        let rtlEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .rightToLeft)
+        let ltrEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+
+        let rtlResult = applyEdits(to: draft1, edits: rtlEdits)
+        let ltrResult = applyEditsLeftToRight(to: draft1, edits: ltrEdits)
+
+        XCTAssertEqual(rtlResult, draft2, "RTL should produce draft2")
+        XCTAssertEqual(ltrResult, draft2, "LTR should produce draft2")
+        XCTAssertEqual(rtlResult, ltrResult, "Both directions should produce identical results")
+    }
+
     // MARK: - Helper Functions
 
     /// Applies edits to text to verify correctness
@@ -337,6 +413,45 @@ final class EditOperationConverterTests: XCTestCase {
                 }
                 let insertIndex = min(edit.position, chars.count)
                 chars.insert(contentsOf: newText, at: insertIndex)
+
+            default:
+                break
+            }
+        }
+
+        return String(chars)
+    }
+
+    /// Applies left-to-right sorted edits using an offset accumulator.
+    /// This mirrors the cursor logic TypingManager will use for forward editing.
+    private func applyEditsLeftToRight(to text: String, edits: [EditWithPosition]) -> String {
+        var chars = Array(text)
+        var offsetAccumulator = 0
+
+        for edit in edits {
+            let adjustedPosition = edit.position + offsetAccumulator
+
+            switch edit.operation {
+            case .delete(let count, _):
+                let endIndex = min(adjustedPosition + count, chars.count)
+                if adjustedPosition < chars.count {
+                    chars.removeSubrange(adjustedPosition..<endIndex)
+                }
+                offsetAccumulator -= count
+
+            case .insert(let insertText):
+                let insertIndex = min(adjustedPosition, chars.count)
+                chars.insert(contentsOf: insertText, at: insertIndex)
+                offsetAccumulator += insertText.count
+
+            case .replace(let oldCount, let newText, _):
+                let endIndex = min(adjustedPosition + oldCount, chars.count)
+                if adjustedPosition < chars.count {
+                    chars.removeSubrange(adjustedPosition..<endIndex)
+                }
+                let insertIndex = min(adjustedPosition, chars.count)
+                chars.insert(contentsOf: newText, at: insertIndex)
+                offsetAccumulator += newText.count - oldCount
 
             default:
                 break
