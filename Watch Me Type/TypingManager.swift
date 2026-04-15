@@ -1272,7 +1272,7 @@ final class TypingManager: NSObject, ObservableObject {
         // Step 2: Initialize editing state
         state = .editing
         progressText = "Editing Draft 1 into Draft 2…"
-        progressFraction = 0.5
+        progressFraction = (draft3Text != nil && !draft3Text!.isEmpty) ? 0.33 : 0.5
         isThinking = false
         currentEditIndex = 0
         actualCursorPosition = draft1.count // Cursor starts at end of draft1
@@ -1738,9 +1738,20 @@ final class TypingManager: NSObject, ObservableObject {
         currentEditIndex += 1
 
         // Update progress
-        let progress = Double(currentEditIndex) / Double(positionedEdits.count)
+        let editProgress = Double(currentEditIndex) / Double(positionedEdits.count)
         DispatchQueue.main.async {
-            self.progressFraction = 0.5 + (progress * 0.5)
+            if self.draft3Text != nil && !self.draft3Text!.isEmpty {
+                // Three phases: typing 0-0.33, edit1 0.33-0.66, edit2 0.66-1.0
+                switch self.editDirection {
+                case .rightToLeft:
+                    self.progressFraction = 0.33 + (editProgress * 0.33)
+                case .leftToRight:
+                    self.progressFraction = 0.66 + (editProgress * 0.34)
+                }
+            } else {
+                // Two phases: typing 0-0.5, editing 0.5-1.0
+                self.progressFraction = 0.5 + (editProgress * 0.5)
+            }
         }
 
         // Apply extra delay for custom editing duration, then move to next edit
@@ -2004,6 +2015,10 @@ final class TypingManager: NSObject, ObservableObject {
         editPositionOffset = 0
         editingDocumentText = draft2
         extraDelayPerEdit = 0
+
+        DispatchQueue.main.async {
+            self.progressFraction = 0.66
+        }
 
         // actualCursorPosition is carried over -- do NOT reset it
 
