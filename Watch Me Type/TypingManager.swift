@@ -67,6 +67,7 @@ final class TypingManager: NSObject, ObservableObject {
     @Published var lastRunDuration: TimeInterval?
     @Published var lastTypingPhaseDuration: TimeInterval?
     @Published var lastEditingPhaseDuration: TimeInterval?
+    @Published var lastEditingPhase2Duration: TimeInterval?
     @Published var progressFraction: Double = 0.0  // 0.0 = not started, 1.0 = complete
     @Published var lastEditingError: EditingError?  // Set when editing fails, cleared after handling
 
@@ -120,6 +121,8 @@ final class TypingManager: NSObject, ObservableObject {
     private var actualCursorPosition: Int = 0            // Actual cursor position in the modified text
     private var editingDocumentText: String?             // Our internal model of the document during editing
     private var customEditingDuration: TimeInterval?
+    private var draft3Text: String?                      // Target text (Draft 3)
+    private var customEditingDuration2: TimeInterval?     // Custom duration for Draft 2→3 editing
     private var extraDelayPerEdit: TimeInterval = 0      // Extra delay between edits for custom duration
 
     // Editing direction and offset tracking
@@ -289,10 +292,14 @@ final class TypingManager: NSObject, ObservableObject {
         lastCompletionDate = nil
         lastTypingPhaseDuration = nil
         lastEditingPhaseDuration = nil
+        lastEditingPhase2Duration = nil
         editingStartDate = nil
         extraDelayPerEdit = 0
         progressFraction = 0.0
         lastEditingError = nil
+        draft3Text = nil
+        customEditingDuration2 = nil
+        editPositionOffset = 0
     }
     
     // MARK: - Private typing logic
@@ -1222,17 +1229,19 @@ final class TypingManager: NSObject, ObservableObject {
     func startTwoPhaseTyping(
         draft1: String,
         draft2: String,
+        draft3: String? = nil,
         wpm: Int,
         countdown: Int = 10,
         typingDuration: TimeInterval? = nil,
         editingDuration: TimeInterval? = nil,
+        editingDuration2: TimeInterval? = nil,
         simulateMistakes: Bool = false
     ) {
-        // Store draft2 and editing duration for later use
         self.draft2Text = draft2
         self.customEditingDuration = editingDuration
+        self.draft3Text = draft3
+        self.customEditingDuration2 = editingDuration2
 
-        // Start with normal typing of draft1
         startTyping(
             text: draft1,
             wpm: wpm,
@@ -1916,38 +1925,100 @@ final class TypingManager: NSObject, ObservableObject {
     private func finishEditing() {
         typingWorkItem?.cancel()
         typingWorkItem = nil
-
         stopPeriodicFocusCheck()
-        endSleepPrevention()
 
-        DispatchQueue.main.async {
-            // Record editing phase duration
-            if let editStart = self.editingStartDate {
-                self.lastEditingPhaseDuration = Date().timeIntervalSince(editStart)
+        var currentPhaseDuration: TimeInterval?
+        if let editStart = editingStartDate {
+            currentPhaseDuration = Date().timeIntervalSince(editStart)
+        }
+
+        // After RTL editing (Draft 1→2), check if we need Draft 2→3
+        if editDirection == .rightToLeft,
+           let draft2 = draft2Text, !draft2.isEmpty,
+           let draft3 = draft3Text, !draft3.isEmpty {
+            self.lastEditingPhaseDuration = currentPhaseDuration
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                guard let self = self else { return }
+                self.startForwardEditing(
+                    draft2: draft2,
+                    draft3: draft3,
+                    customDuration: self.customEditingDuration2
+                )
             }
+        } else {
+            endSleepPrevention()
 
-            // Total run duration (typing + editing)
-            if let start = self.typingStartDate {
-                self.lastRunDuration = Date().timeIntervalSince(start)
+            DispatchQueue.main.async {
+                if self.editDirection == .leftToRight {
+                    self.lastEditingPhase2Duration = currentPhaseDuration
+                } else {
+                    self.lastEditingPhaseDuration = currentPhaseDuration
+                }
+
+                if let start = self.typingStartDate {
+                    self.lastRunDuration = Date().timeIntervalSince(start)
+                }
+
+                self.progressFraction = 1.0
+                self.state = .idle
+                self.lastCompletionDate = Date()
+                self.progressText = "Editing complete."
+                self.isThinking = false
+                self.targetAppPID = nil
+                self.targetWindowTitle = nil
+                self.editingStartDate = nil
+
+                self.draft2Text = nil
+                self.draft3Text = nil
+                self.positionedEdits = []
+                self.currentEditIndex = 0
+                self.actualCursorPosition = 0
+                self.customEditingDuration = nil
+                self.customEditingDuration2 = nil
+                self.extraDelayPerEdit = 0
+                self.editPositionOffset = 0
             }
+        }
+    }
 
-            self.progressFraction = 1.0
-            self.state = .idle
-            self.lastCompletionDate = Date()
-            self.progressText = "Editing complete."
-            self.isThinking = false
-            self.targetAppPID = nil
-            self.targetWindowTitle = nil
-            self.editingStartDate = nil
+    /// Starts left-to-right editing to transform draft2 into draft3.
+    /// Cursor position is carried over from the previous right-to-left editing phase.
+    private func startForwardEditing(draft2: String, draft3: String, customDuration: TimeInterval?) {
+        if draft2 == draft3 {
+            finishEditing()
+            return
+        }
 
-            // Clear editing state
-            self.draft2Text = nil
-            self.positionedEdits = []
-            self.currentEditIndex = 0
-            self.actualCursorPosition = 0
-            self.customEditingDuration = nil
-            self.extraDelayPerEdit = 0
-            self.editPositionOffset = 0
+        editingStartDate = Date()
+
+        appLog("Starting forward editing - Draft 2: \(draft2.count) chars, Draft 3: \(draft3.count) chars, cursor at \(actualCursorPosition)", level: .info)
+
+        positionedEdits = convertDraftsToPositionedEdits(draft1: draft2, draft2: draft3, direction: .leftToRight)
+        appLog("Generated \(positionedEdits.count) forward edits", level: .debug)
+
+        progressText = "Editing Draft 2 into Draft 3..."
+        isThinking = false
+        currentEditIndex = 0
+        editDirection = .leftToRight
+        editPositionOffset = 0
+        editingDocumentText = draft2
+        extraDelayPerEdit = 0
+
+        // actualCursorPosition is carried over -- do NOT reset it
+
+        if let targetDuration = customDuration, targetDuration > 0, !positionedEdits.isEmpty {
+            let naturalEditingTime = estimateNaturalEditingTime()
+            let extraBudget = max(0, targetDuration - naturalEditingTime)
+            if extraBudget > 0 {
+                extraDelayPerEdit = extraBudget / Double(positionedEdits.count)
+            }
+        }
+
+        startPeriodicFocusCheck()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.executeNextEdit()
         }
     }
 
@@ -1977,10 +2048,12 @@ final class TypingManager: NSObject, ObservableObject {
 
             // Clear editing state
             self.draft2Text = nil
+            self.draft3Text = nil
             self.positionedEdits = []
             self.currentEditIndex = 0
             self.actualCursorPosition = 0
             self.customEditingDuration = nil
+            self.customEditingDuration2 = nil
             self.extraDelayPerEdit = 0
             self.editPositionOffset = 0
         }
