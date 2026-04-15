@@ -27,6 +27,12 @@ enum TypingState: Sendable, Equatable {
     case paused
 }
 
+/// Direction of the editing pass
+enum EditDirection {
+    case rightToLeft  // Cursor starts at end, works backward (backspace to delete)
+    case leftToRight  // Cursor starts near beginning, works forward (select + delete)
+}
+
 /// Errors that can occur during the editing phase
 enum EditingError: Error, LocalizedError, Sendable, Equatable {
     case focusLostDuringEdit
@@ -115,6 +121,10 @@ final class TypingManager: NSObject, ObservableObject {
     private var editingDocumentText: String?             // Our internal model of the document during editing
     private var customEditingDuration: TimeInterval?
     private var extraDelayPerEdit: TimeInterval = 0      // Extra delay between edits for custom duration
+
+    // Editing direction and offset tracking
+    private var editDirection: EditDirection = .rightToLeft
+    private var editPositionOffset: Int = 0  // Cumulative offset for left-to-right editing
 
     // Edit-phase character typing state (mirrors typing phase for reliability)
     private var editCharsToType: [Character] = []        // Characters being inserted during an edit
@@ -518,6 +528,21 @@ final class TypingManager: NSObject, ObservableObject {
         startPeriodicFocusCheck()
 
         scheduleNextCharacter(after: interCharacterDelay)
+    }
+
+    // MARK: - UI-Callable Pause/Resume
+
+    /// Pauses typing from the UI (same behavior as ESC during typing phase).
+    /// Only applies to the typing phase — editing cannot be paused.
+    func pauseTypingFromUI() {
+        pauseTyping()
+    }
+
+    /// Resumes typing from the UI after a user-initiated pause.
+    /// Only applies when paused from the typing phase.
+    func resumeTypingFromUI() {
+        guard state == .paused, stateBeforePause == .typing else { return }
+        resumeTyping()
     }
 
     // MARK: - Periodic Focus Checking
@@ -1410,23 +1435,23 @@ final class TypingManager: NSObject, ObservableObject {
         return String(doc[range]) == expected
     }
 
-    /// Applies a delete/insert/replace to the tracked document text.
-    private func applyEditToTrackedDocument(_ edit: EditWithPosition) {
+    /// Applies a delete/insert/replace to the tracked document text at the given adjusted position.
+    private func applyEditToTrackedDocument(_ edit: EditWithPosition, at position: Int) {
         guard var doc = editingDocumentText else { return }
 
         switch edit.operation {
         case .delete(let count, _):
-            if let range = stringRange(in: doc, position: edit.position, length: count) {
+            if let range = stringRange(in: doc, position: position, length: count) {
                 doc.removeSubrange(range)
                 editingDocumentText = doc
             }
         case .insert(let text):
-            if let range = stringRange(in: doc, position: edit.position, length: 0) {
+            if let range = stringRange(in: doc, position: position, length: 0) {
                 doc.replaceSubrange(range, with: text)
                 editingDocumentText = doc
             }
         case .replace(let oldCount, let newText, _):
-            if let range = stringRange(in: doc, position: edit.position, length: oldCount) {
+            if let range = stringRange(in: doc, position: position, length: oldCount) {
                 doc.replaceSubrange(range, with: newText)
                 editingDocumentText = doc
             }
@@ -1435,38 +1460,41 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
-    /// Navigates to the edit position and executes it
-    /// Key insight: For right-to-left editing, draft1 positions < current edit position are unchanged
-    /// Always uses relative navigation (left arrows) to work correctly with pre-existing document content
-    /// For delete/replace: navigate to END of text to delete, then backspace (more reliable in web editors)
-    /// For insert: navigate to insert position
+    /// Navigates to the edit position and executes it.
+    /// Supports both right-to-left (backspace) and left-to-right (select-forward + delete) directions.
+    /// For right-to-left: navigate to END of text to delete, then backspace.
+    /// For left-to-right: navigate to START of text, then select-forward + delete.
     private func navigateAndExecuteEdit(_ edit: EditWithPosition) {
-        // Calculate navigation target based on operation type
-        // For delete/replace: go to END of text to delete (position + count), then backspace
-        // For insert: go to insert position
+        let adjustedPosition = editDirection == .leftToRight
+            ? edit.position + editPositionOffset
+            : edit.position
+
         let navigationTarget: Int
-        switch edit.operation {
-        case .delete(let count, _):
-            navigationTarget = edit.position + count  // End of text to delete
-        case .replace(let oldCount, _, _):
-            navigationTarget = edit.position + oldCount  // End of text to replace
-        case .insert:
-            navigationTarget = edit.position  // Insert position
-        default:
-            navigationTarget = edit.position
+        switch editDirection {
+        case .rightToLeft:
+            switch edit.operation {
+            case .delete(let count, _):
+                navigationTarget = adjustedPosition + count
+            case .replace(let oldCount, _, _):
+                navigationTarget = adjustedPosition + oldCount
+            case .insert:
+                navigationTarget = adjustedPosition
+            default:
+                navigationTarget = adjustedPosition
+            }
+        case .leftToRight:
+            navigationTarget = adjustedPosition
         }
 
-        let leftMoveCount = actualCursorPosition - navigationTarget
+        let moveDistance = actualCursorPosition - navigationTarget
 
-        if leftMoveCount > 0 {
-            appLog("Moving left: \(leftMoveCount) characters to position \(navigationTarget)", level: .debug)
-            navigateLeftAndExecute(count: leftMoveCount, edit: edit)
-        } else if leftMoveCount < 0 {
-            // Need to move right (shouldn't happen in right-to-left editing, but handle it)
-            appLog("Moving right: \(-leftMoveCount) characters to position \(navigationTarget)", level: .debug)
-            navigateRightAndExecute(count: -leftMoveCount, edit: edit)
+        if moveDistance > 0 {
+            appLog("Moving left: \(moveDistance) characters to position \(navigationTarget)", level: .debug)
+            navigateLeftAndExecute(count: moveDistance, edit: edit)
+        } else if moveDistance < 0 {
+            appLog("Moving right: \(-moveDistance) characters to position \(navigationTarget)", level: .debug)
+            navigateRightAndExecute(count: -moveDistance, edit: edit)
         } else {
-            // Already at the position - still pause before edit
             let preEditDelay = 0.2 * editingDelayMultiplier
             DispatchQueue.main.asyncAfter(deadline: .now() + preEditDelay) { [weak self] in
                 guard let self = self, self.state == .editing else { return }
@@ -1508,37 +1536,51 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
-    /// Executes a single edit operation (delete, insert, or replace) at the current cursor position
-    /// Updates actualCursorPosition based on the operation performed
+    /// Executes a single edit operation (delete, insert, or replace) at the current cursor position.
+    /// Supports both right-to-left (backspace) and left-to-right (select-forward + delete) directions.
+    /// Updates actualCursorPosition and editPositionOffset based on the operation performed.
     private func executeEditAtCurrentPosition(_ edit: EditWithPosition) {
-        let targetPosition = edit.position
+        let adjustedPosition = editDirection == .leftToRight
+            ? edit.position + editPositionOffset
+            : edit.position
 
         switch edit.operation {
         case .delete(let count, let expectedText):
-            // Safety check: ensure the text we think we're deleting is present
-            guard verifyExpectedText(expected: expectedText, at: targetPosition, length: count) else {
-                abortEditingWithError(.unexpectedState("Expected text mismatch before delete at position \(targetPosition)"))
+            guard verifyExpectedText(expected: expectedText, at: adjustedPosition, length: count) else {
+                abortEditingWithError(.unexpectedState("Expected text mismatch before delete at position \(adjustedPosition)"))
                 return
             }
-            appLog("Deleting \(count) characters with backspace (from end)", level: .debug)
-            // We're at the END of the text to delete, so just backspace N times
-            // This is more reliable in web editors like Google Docs
-            let backspaceDelay = 0.1 * editingDelayMultiplier
-            sendKeysWithDelay(count: count, delay: backspaceDelay) {
-                self.sendBackspace()
-            } completion: { [weak self] in
-                guard let self = self, self.state == .editing else { return }
 
-                // After backspacing, cursor is at targetPosition (start of deleted text)
-                self.actualCursorPosition = targetPosition
-                self.applyEditToTrackedDocument(edit)
-                appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
-
-                // Short pause after deletion
-                let postDeleteDelay = 0.3 * self.editingDelayMultiplier
-                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+            switch editDirection {
+            case .rightToLeft:
+                appLog("Deleting \(count) characters with backspace (from end)", level: .debug)
+                let backspaceDelay = 0.1 * editingDelayMultiplier
+                sendKeysWithDelay(count: count, delay: backspaceDelay) {
+                    self.sendBackspace()
+                } completion: { [weak self] in
                     guard let self = self, self.state == .editing else { return }
-                    self.completeCurrentEditBackwards()
+                    self.actualCursorPosition = adjustedPosition
+                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
+                    appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
+                    let postDeleteDelay = 0.3 * self.editingDelayMultiplier
+                    DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+                        guard let self = self, self.state == .editing else { return }
+                        self.completeCurrentEdit()
+                    }
+                }
+            case .leftToRight:
+                appLog("Deleting \(count) characters with select-forward + delete", level: .debug)
+                selectAndDelete(count: count) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.actualCursorPosition = adjustedPosition
+                    self.editPositionOffset -= count
+                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
+                    appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition), offset now \(self.editPositionOffset)", level: .debug)
+                    let postDeleteDelay = 0.3 * self.editingDelayMultiplier
+                    DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+                        guard let self = self, self.state == .editing else { return }
+                        self.completeCurrentEdit()
+                    }
                 }
             }
 
@@ -1548,48 +1590,56 @@ final class TypingManager: NSObject, ObservableObject {
             let delay = baseDelay * editingDelayMultiplier
             sendCharactersWithDelay(text, delay: delay) { [weak self] in
                 guard let self = self, self.state == .editing else { return }
-
-                // After insertion, cursor is at targetPosition + inserted text length
-                // NO move-back needed! We track actual position for next navigation
-                self.actualCursorPosition = targetPosition + text.count
-                self.applyEditToTrackedDocument(edit)
+                self.actualCursorPosition = adjustedPosition + text.count
+                if self.editDirection == .leftToRight {
+                    self.editPositionOffset += text.count
+                }
+                self.applyEditToTrackedDocument(edit, at: adjustedPosition)
                 appLog("Inserted \(text.count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
-
-                // Longer pause after insert to let web editors catch up
                 let postInsertDelay = 0.3 * self.editingDelayMultiplier
                 DispatchQueue.main.asyncAfter(deadline: .now() + postInsertDelay) { [weak self] in
                     guard let self = self, self.state == .editing else { return }
-                    self.completeCurrentEditBackwards()
+                    self.completeCurrentEdit()
                 }
             }
 
         case .replace(let oldCount, let newText, let expectedOldText):
-            // Safety check: ensure the text we intend to replace matches expectation
-            guard verifyExpectedText(expected: expectedOldText, at: targetPosition, length: oldCount) else {
-                abortEditingWithError(.unexpectedState("Expected text mismatch before replace at position \(targetPosition)"))
+            guard verifyExpectedText(expected: expectedOldText, at: adjustedPosition, length: oldCount) else {
+                abortEditingWithError(.unexpectedState("Expected text mismatch before replace at position \(adjustedPosition)"))
                 return
             }
             appLog("Replacing \(oldCount) chars with '\(newText.prefix(30))\(newText.count > 30 ? "..." : "")'", level: .debug)
-            executeReplace(oldCount: oldCount, newText: newText) { [weak self] in
-                guard let self = self, self.state == .editing else { return }
 
-                // After replace, cursor is at targetPosition + new text length
-                // NO move-back needed!
-                self.actualCursorPosition = targetPosition + newText.count
-                self.applyEditToTrackedDocument(edit)
-                appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
-
-                // Longer pause after replace to let web editors catch up
-                let postReplaceDelay = 0.3 * self.editingDelayMultiplier
-                DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
+            switch editDirection {
+            case .rightToLeft:
+                executeReplace(oldCount: oldCount, newText: newText) { [weak self] in
                     guard let self = self, self.state == .editing else { return }
-                    self.completeCurrentEditBackwards()
+                    self.actualCursorPosition = adjustedPosition + newText.count
+                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
+                    appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
+                    let postReplaceDelay = 0.3 * self.editingDelayMultiplier
+                    DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
+                        guard let self = self, self.state == .editing else { return }
+                        self.completeCurrentEdit()
+                    }
+                }
+            case .leftToRight:
+                executeReplaceForward(oldCount: oldCount, newText: newText) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.actualCursorPosition = adjustedPosition + newText.count
+                    self.editPositionOffset += newText.count - oldCount
+                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
+                    appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition), offset now \(self.editPositionOffset)", level: .debug)
+                    let postReplaceDelay = 0.3 * self.editingDelayMultiplier
+                    DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
+                        guard let self = self, self.state == .editing else { return }
+                        self.completeCurrentEdit()
+                    }
                 }
             }
 
         default:
-            // Other operations not used in backwards editing
-            completeCurrentEditBackwards()
+            completeCurrentEdit()
         }
     }
 
@@ -1637,8 +1687,43 @@ final class TypingManager: NSObject, ObservableObject {
         }
     }
 
+    /// Executes a forward replace: select-forward to select old text, delete, then insert new text.
+    /// Used in left-to-right editing where cursor is at the START of text to replace.
+    private func executeReplaceForward(oldCount: Int, newText: String, completion: @escaping () -> Void) {
+        let postDeleteDelay = 0.2 * editingDelayMultiplier
+        let postInsertDelay = 0.3 * editingDelayMultiplier
+        let baseDelay = max(0.05, interCharacterDelay) * editingDelayMultiplier
+
+        let performInsert: () -> Void = { [weak self] in
+            guard let self = self else { return }
+            guard !newText.isEmpty else {
+                completion()
+                return
+            }
+            self.sendCharactersWithDelay(newText, delay: baseDelay) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + postInsertDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    completion()
+                }
+            }
+        }
+
+        if oldCount > 0 {
+            selectAndDelete(count: oldCount) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    performInsert()
+                }
+            }
+        } else {
+            performInsert()
+        }
+    }
+
     /// Completes the current edit and moves to the next one
-    private func completeCurrentEditBackwards() {
+    private func completeCurrentEdit() {
         currentEditIndex += 1
 
         // Update progress
