@@ -434,10 +434,11 @@ final class EditOperationConverterTests: XCTestCase {
             switch edit.operation {
             case .delete(let count, _):
                 let endIndex = min(adjustedPosition + count, chars.count)
-                if adjustedPosition < chars.count {
+                let deletedCount = adjustedPosition < chars.count ? endIndex - adjustedPosition : 0
+                if deletedCount > 0 {
                     chars.removeSubrange(adjustedPosition..<endIndex)
                 }
-                offsetAccumulator -= count
+                offsetAccumulator -= deletedCount
 
             case .insert(let insertText):
                 let insertIndex = min(adjustedPosition, chars.count)
@@ -446,12 +447,13 @@ final class EditOperationConverterTests: XCTestCase {
 
             case .replace(let oldCount, let newText, _):
                 let endIndex = min(adjustedPosition + oldCount, chars.count)
-                if adjustedPosition < chars.count {
+                let deletedCount = adjustedPosition < chars.count ? endIndex - adjustedPosition : 0
+                if deletedCount > 0 {
                     chars.removeSubrange(adjustedPosition..<endIndex)
                 }
                 let insertIndex = min(adjustedPosition, chars.count)
                 chars.insert(contentsOf: newText, at: insertIndex)
-                offsetAccumulator += newText.count - oldCount
+                offsetAccumulator += newText.count - deletedCount
 
             default:
                 break
