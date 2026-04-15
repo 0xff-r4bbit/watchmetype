@@ -1269,6 +1269,8 @@ final class TypingManager: NSObject, ObservableObject {
         actualCursorPosition = draft1.count // Cursor starts at end of draft1
         editingDocumentText = draft1        // Track live text for safety checks
         extraDelayPerEdit = 0
+        editDirection = .rightToLeft
+        editPositionOffset = 0
 
         // Step 3: Calculate extra delay per edit if custom duration is specified
         if let targetDuration = customDuration, targetDuration > 0, !positionedEdits.isEmpty {
@@ -1287,7 +1289,7 @@ final class TypingManager: NSObject, ObservableObject {
 
         // Pause briefly before starting edits (simulates reviewing Draft 1)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.executeNextEditBackwards()
+            self?.executeNextEdit()
         }
     }
 
@@ -1392,7 +1394,7 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     /// Executes edits sequentially using backwards editing (right-to-left)
-    private func executeNextEditBackwards() {
+    private func executeNextEdit() {
         guard state == .editing else { return }
         guard currentEditIndex < positionedEdits.count else {
             finishEditing()
@@ -1743,10 +1745,10 @@ final class TypingManager: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     self.isThinking = false
                 }
-                self.executeNextEditBackwards()
+                self.executeNextEdit()
             }
         } else {
-            executeNextEditBackwards()
+            executeNextEdit()
         }
     }
 
@@ -1908,7 +1910,7 @@ final class TypingManager: NSObject, ObservableObject {
         // Restart periodic focus check
         startPeriodicFocusCheck()
 
-        executeNextEditBackwards()
+        executeNextEdit()
     }
 
     private func finishEditing() {
@@ -1945,6 +1947,7 @@ final class TypingManager: NSObject, ObservableObject {
             self.actualCursorPosition = 0
             self.customEditingDuration = nil
             self.extraDelayPerEdit = 0
+            self.editPositionOffset = 0
         }
     }
 
@@ -1979,6 +1982,7 @@ final class TypingManager: NSObject, ObservableObject {
             self.actualCursorPosition = 0
             self.customEditingDuration = nil
             self.extraDelayPerEdit = 0
+            self.editPositionOffset = 0
         }
     }
 
