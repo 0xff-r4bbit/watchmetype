@@ -183,6 +183,9 @@ struct ContentView: View {
     @State private var customEditingDuration: Bool = false
     @State private var editingDurationValue: String = ""
     @State private var editingDurationUnit: DurationUnit = .minutes
+    @State private var customEditingDuration2: Bool = false
+    @State private var editingDuration2Value: String = ""
+    @State private var editingDuration2Unit: DurationUnit = .minutes
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -315,10 +318,12 @@ struct ContentView: View {
                     typingManager.startTwoPhaseTyping(
                         draft1: inputText,
                         draft2: inputTextDraft2,
+                        draft3: (showDraft3 && hasThirdDraftText) ? inputTextDraft3 : nil,
                         wpm: Int(targetWPM),
                         countdown: 10,
                         typingDuration: desiredDurationSeconds,
                         editingDuration: editingDurationSeconds,
+                        editingDuration2: editingDuration2Seconds,
                         simulateMistakes: true
                     )
                 } else {
@@ -413,6 +418,7 @@ struct ContentView: View {
     private var bothDraftsEmpty: Bool {
         inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && inputTextDraft3.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     @ViewBuilder
@@ -432,11 +438,25 @@ struct ContentView: View {
                 }
 
                 if showDraft2 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        draftEditorView(
+                            title: "Draft 2",
+                            text: $inputTextDraft2,
+                            placeholder: "Paste your final draft here.",
+                            editorAccessibilityLabel: "Draft 2 text editor"
+                        )
+
+                        Toggle("I have a draft 3", isOn: $showDraft3)
+                            .font(.subheadline)
+                    }
+                }
+
+                if showDraft2 && showDraft3 {
                     draftEditorView(
-                        title: "Draft 2",
-                        text: $inputTextDraft2,
-                        placeholder: "Paste your final draft here.",
-                        editorAccessibilityLabel: "Draft 2 text editor"
+                        title: "Draft 3",
+                        text: $inputTextDraft3,
+                        placeholder: "Paste your third draft here.",
+                        editorAccessibilityLabel: "Draft 3 text editor"
                     )
                 }
             }
@@ -550,6 +570,9 @@ struct ContentView: View {
             typingSpeedCard
             if showDraft2 {
                 editingCard
+            }
+            if showDraft2 && showDraft3 {
+                editing2Card
             }
 
             Spacer(minLength: 0)
@@ -751,6 +774,56 @@ struct ContentView: View {
         )
         .opacity(hasSecondDraft ? 1.0 : 0.5)
         .disabled(!hasSecondDraft)
+    }
+
+    @ViewBuilder
+    private var editing2Card: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label("Editing 2", systemImage: "pencil.and.outline")
+                .font(.headline)
+                .bold()
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(hasThirdDraftText
+                    ? "After editing into draft 2, the app will edit it to match draft 3."
+                    : "Paste text in Draft 3 to enable the second editing phase.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle("Custom Editing Duration", isOn: $customEditingDuration2)
+                    .font(.subheadline)
+
+                if customEditingDuration2 {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("edit for at least")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 4)
+
+                        TextField("e.g. 5", text: $editingDuration2Value)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 60)
+
+                        Picker("", selection: $editingDuration2Unit) {
+                            ForEach(DurationUnit.allCases) { unit in
+                                Text(unit.displayName).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+        .opacity(hasThirdDraftText ? 1.0 : 0.5)
+        .disabled(!hasThirdDraftText)
     }
 
     @ViewBuilder
@@ -1321,11 +1394,29 @@ struct ContentView: View {
         }
     }
 
+    private var editingDuration2Seconds: TimeInterval? {
+        guard customEditingDuration2,
+              let value = Double(editingDuration2Value.replacingOccurrences(of: ",", with: ".")),
+              value > 0
+        else {
+            return nil
+        }
+
+        switch editingDuration2Unit {
+        case .minutes:
+            return value * 60
+        case .hours:
+            return value * 3600
+        }
+    }
+
     private func processInputText() {
-        // Process both drafts
         inputText = processText(inputText)
         if !inputTextDraft2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             inputTextDraft2 = processText(inputTextDraft2)
+        }
+        if !inputTextDraft3.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            inputTextDraft3 = processText(inputTextDraft3)
         }
     }
 
