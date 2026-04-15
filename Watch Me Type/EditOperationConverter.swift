@@ -319,9 +319,19 @@ func computeHybridEditScript(draft1: String, draft2: String) -> [Edit] {
     return result
 }
 
-/// Converts two drafts into positioned edit operations for backwards editing
-/// Returns edits sorted from end to beginning (right to left)
-func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWithPosition] {
+/// Direction for applying positioned edits
+enum EditSortDirection {
+    case rightToLeft  // Existing: sort descending by position
+    case leftToRight  // New: sort ascending by position
+}
+
+/// Converts two drafts into positioned edit operations
+/// Returns edits sorted by the specified direction (default: right to left for backward compatibility)
+func convertDraftsToPositionedEdits(
+    draft1: String,
+    draft2: String,
+    direction: EditSortDirection = .rightToLeft
+) -> [EditWithPosition] {
     var editsWithPositions: [EditWithPosition] = []
 
     // Step 1: Compute hybrid edit script using sentence-level analysis
@@ -419,17 +429,29 @@ func convertDraftsToPositionedEdits(draft1: String, draft2: String) -> [EditWith
         }
     }
 
-    // Step 3: Sort by position descending, then by originalIndex ascending
-    // This ensures: (1) we work right-to-left, (2) same-position edits stay in order
-    let sortedEdits = editsWithPositions.sorted {
-        if $0.position != $1.position {
-            return $0.position > $1.position  // Higher position first (right to left)
-        } else {
-            return $0.originalIndex < $1.originalIndex  // Earlier edits first at same position
+    // Step 3: Sort by position according to the requested direction
+    // Same-position edits always maintain original order (ascending originalIndex)
+    let sortedEdits: [EditWithPosition]
+    switch direction {
+    case .rightToLeft:
+        sortedEdits = editsWithPositions.sorted {
+            if $0.position != $1.position {
+                return $0.position > $1.position
+            } else {
+                return $0.originalIndex < $1.originalIndex
+            }
+        }
+    case .leftToRight:
+        sortedEdits = editsWithPositions.sorted {
+            if $0.position != $1.position {
+                return $0.position < $1.position
+            } else {
+                return $0.originalIndex < $1.originalIndex
+            }
         }
     }
 
-    appLog("Computed \(sortedEdits.count) positioned edits (backwards order)", level: .debug)
+    appLog("Computed \(sortedEdits.count) positioned edits (\(direction == .rightToLeft ? "right-to-left" : "left-to-right") order)", level: .debug)
 
     return sortedEdits
 }

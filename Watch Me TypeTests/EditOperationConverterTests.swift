@@ -287,6 +287,30 @@ final class EditOperationConverterTests: XCTestCase {
         XCTAssertEqual(result, draft2)
     }
 
+    // MARK: - Left-to-Right Sorted Edits Tests
+
+    func testPositionedEditsLeftToRightOrder() {
+        let draft1 = "The quick brown fox"
+        let draft2 = "A slow brown cat"
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .leftToRight)
+
+        for i in 0..<(edits.count - 1) {
+            XCTAssertLessThanOrEqual(edits[i].position, edits[i + 1].position,
+                "Edits should be sorted left-to-right")
+        }
+    }
+
+    func testPositionedEditsRightToLeftOrderBackwardsCompatible() {
+        let draft1 = "The quick brown fox"
+        let draft2 = "A slow brown cat"
+        let edits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2)
+
+        for i in 0..<(edits.count - 1) {
+            XCTAssertGreaterThanOrEqual(edits[i].position, edits[i + 1].position,
+                "Default edits should be sorted right-to-left")
+        }
+    }
+
     // MARK: - Helper Functions
 
     /// Applies edits to text to verify correctness
