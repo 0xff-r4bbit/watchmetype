@@ -387,6 +387,51 @@ final class EditOperationConverterTests: XCTestCase {
         XCTAssertEqual(rtlResult, ltrResult, "Both directions should produce identical results")
     }
 
+    // MARK: - Three-Draft Pipeline Tests
+
+    func testThreeDraftPipelineProducesCorrectFinalResult() {
+        let draft1 = "The quick brown fox jumps over the lazy dog."
+        let draft2 = "The fast brown fox jumps over a lazy dog."
+        let draft3 = "A fast brown fox leaps over a lazy cat."
+
+        // Phase 1: Draft 1 → Draft 2 (right-to-left)
+        let rtlEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .rightToLeft)
+        let afterPhase1 = applyEdits(to: draft1, edits: rtlEdits)
+        XCTAssertEqual(afterPhase1, draft2, "Phase 1 should produce draft2")
+
+        // Phase 2: Draft 2 → Draft 3 (left-to-right)
+        let ltrEdits = convertDraftsToPositionedEdits(draft1: draft2, draft2: draft3, direction: .leftToRight)
+        let afterPhase2 = applyEditsLeftToRight(to: afterPhase1, edits: ltrEdits)
+        XCTAssertEqual(afterPhase2, draft3, "Phase 2 should produce draft3")
+    }
+
+    func testThreeDraftPipelineWithDramaticChanges() {
+        let draft1 = "Machine learning is revolutionizing every industry. Companies are investing billions in AI research."
+        let draft2 = "Machine learning is transforming many industries. Organizations are investing significantly in AI."
+        let draft3 = "AI is transforming industries worldwide. Organizations continue to invest heavily in research."
+
+        let rtlEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .rightToLeft)
+        let afterPhase1 = applyEdits(to: draft1, edits: rtlEdits)
+        XCTAssertEqual(afterPhase1, draft2)
+
+        let ltrEdits = convertDraftsToPositionedEdits(draft1: draft2, draft2: draft3, direction: .leftToRight)
+        let afterPhase2 = applyEditsLeftToRight(to: afterPhase1, edits: ltrEdits)
+        XCTAssertEqual(afterPhase2, draft3)
+    }
+
+    func testThreeDraftPipelineIdenticalDraft2And3() {
+        let draft1 = "Hello world."
+        let draft2 = "Hello there."
+        let draft3 = "Hello there."  // Same as draft2
+
+        let rtlEdits = convertDraftsToPositionedEdits(draft1: draft1, draft2: draft2, direction: .rightToLeft)
+        let afterPhase1 = applyEdits(to: draft1, edits: rtlEdits)
+        XCTAssertEqual(afterPhase1, draft2)
+
+        let ltrEdits = convertDraftsToPositionedEdits(draft1: draft2, draft2: draft3, direction: .leftToRight)
+        XCTAssertTrue(ltrEdits.isEmpty, "Identical drafts should produce no edits")
+    }
+
     // MARK: - Helper Functions
 
     /// Applies edits to text to verify correctness
