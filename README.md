@@ -95,7 +95,7 @@ Tests under `Watch Me TypeTests/` cover `EditOperationConverter` (tokenisation, 
 
 ## Installation
 
-1. Download the DMG from [the latest release](https://github.com/0xff-r4bbit/watchmetype/releases/).
+1. Download [the latest DMG](https://github.com/0xff-r4bbit/watchmetype/releases/latest/download/WatchMeType.dmg).
 2. Drag **Watch Me Type** into the **Applications** folder.
 3. Launch the app.
 4. In the in-app prompt, choose **Continue** and grant Accessibility access in System Settings when prompted.
