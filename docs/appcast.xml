@@ -3,6 +3,14 @@
     <channel>
         <title>Watch Me Type</title>
         <item>
+            <title>3.0.0</title>
+            <pubDate>Sat, 25 Apr 2026 12:00:00 -0700</pubDate>
+            <sparkle:version>300</sparkle:version>
+            <sparkle:shortVersionString>3.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/0xff-r4bbit/watchmetype/releases/download/v3.0.0/WatchMeType.dmg" length="2498917" type="application/octet-stream" sparkle:edSignature="RCfbEeDOXpFhVm1HN7ILjzgbwJoHz1859BLt/kX/qBx/yBNiAurZU2/vuNQJprjMCoPOEwaaudOlE3OY0SApDg=="/>
+        </item>
+        <item>
             <title>2.0.6</title>
             <pubDate>Fri, 27 Feb 2026 16:11:47 -0800</pubDate>
             <sparkle:version>206</sparkle:version>
