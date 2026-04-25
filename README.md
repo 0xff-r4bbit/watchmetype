@@ -11,7 +11,7 @@
 
 _because revision history is not learning_
 
-Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft or stage a Draft 1 → Draft 2 revision, locking to the chosen window, auto-pausing on focus changes, and running for at least the duration you need.
+Watch Me Type is an open-source macOS app that types text into any active window with the pacing, pauses, and imperfections of a real person. It can replay a single draft, stage a Draft 1 → Draft 2 revision, or chain a Draft 2 → Draft 3 forward pass — locking to the chosen window, auto-pausing on focus changes, and running for at least the duration you need.
 
 ![Watch Me Type in action](assets/thumbnail.png)
 
@@ -42,10 +42,11 @@ The solution is not better detection; it's building actual relationships with st
 ## Features
 
 - simulates human typing with adjustable 40–120 WPM, thinking pauses, comma/sentence/paragraph delays, and occasional mistakes with backspaces
-- two modes: single-draft typing or two-phase draft1→draft2 editing that rewrites the first draft with cursor-accurate edits and navigation delays
+- three modes: single-draft typing, two-phase draft1→draft2 editing (right-to-left edits to avoid cursor drift), or three-phase draft1→draft2→draft3 chaining that adds a left-to-right forward pass with offset-tracked navigation
 - duration control: auto-estimated or custom minimum typing/editing time targets ("at least") with live progress tracking and a 10-second countdown
-- text clean-up tools: remove blank lines/emojis/bullets/horizontal rules, replace em-dashes, and normalize spacing before/within punctuation when processed
-- focus-aware: locks to the chosen app/window; typing auto-pauses and auto-resumes when focus returns; editing aborts on focus loss for safety; overlays for countdown/typing/thinking/editing/paused/complete; compact always-on-top runtime window
+- text clean-up tools: remove blank lines/emojis/bullets/horizontal rules and numbered list prefixes, replace em-dashes, and normalize spacing before/within punctuation when processed
+- safe edits: every destructive edit verifies expected text against an internal document snapshot and aborts on mismatch, so a focus glitch or stray keystroke can't silently corrupt the target document
+- focus-aware: locks to the chosen app/window; typing auto-pauses and auto-resumes when focus returns; editing aborts on focus loss for safety; overlays for countdown/typing/thinking/editing/paused/complete; compact always-on-top runtime window that resizes itself to match the number of active drafts
 - completion screen: shows typing/editing/total duration, donation options, share link, and quick reset for another run
 - compatible everywhere: types into any macOS text field (Docs, Word, Notes, IDEs, browsers); prevents sleep during sessions; ESC pauses typing and stops editing
 - privacy & localization: no accounts or tracking; English, Simplified Chinese, and Traditional Chinese localization
@@ -58,12 +59,39 @@ The solution is not better detection; it's building actual relationships with st
 
 ## Built With
 
-- Swift + SwiftUI
-- AppKit (NSTextView) for native text editing
-- CoreGraphics (CGEvent) for keyboard simulation
-- macOS Accessibility APIs for focus tracking and window control
+- Swift + SwiftUI for the UI shell
+- AppKit (NSTextView/NSScrollView via NSViewRepresentable) for native text editing with launch focus
+- CoreGraphics (CGEvent) for keyboard event injection
+- macOS Accessibility APIs for focus tracking, target-window locking, and the lazy permission flow
+- pure Swift diff engine (sentence + word-level LCS) shared between right-to-left and left-to-right edit planning
 - Sparkle for in-app updates
-- centralized logging for debugging sessions
+- centralized `os.log`-backed logging via the `appLog` global
+- XCTest unit and integration tests covering the diff engine and the three-draft pipeline
+
+## Architecture
+
+Source layout under `Watch Me Type/`:
+
+- `Watch_Me_TypeApp.swift` — entry point; configures Sparkle and hosts `ContentView`
+- `ContentView.swift` — all UI: draft 1/2/3 editors, settings, overlays, text-cleanup pipeline, and window management (custom equal-width column layout, fused edit-card+editor panels, auto-resizing window per active-draft count)
+- `TypingManager.swift` — `ObservableObject` state machine (`idle → countingDown → typing → editing → paused`), CGEvent injection, focus lock, sleep prevention, ESC handler, direction-aware edit execution (backward backspace path for Draft 2; forward select-then-backspace path with offset accumulator for Draft 3), and pre-edit snapshot verification
+- `EditOperationConverter.swift` — pure free functions only (no side effects, no imports beyond `Foundation`); sentence/word LCS diff that emits positioned edits sortable either right-to-left (`.rightToLeft`) or left-to-right (`.leftToRight`) via the `EditSortDirection` enum
+- `Logger.swift` — `AppLogger` singleton wrapping `os.Logger` with a `none/error/warning/info/debug/verbose` level model; use `appLog(_:level:)` everywhere
+- `AccessibilityPermissionHelper.swift` — lazy permission request, triggered from the in-app explanation screen rather than at launch
+
+Diff pipeline:
+
+1. sentence tokenization with abbreviation awareness ("Dr.", "etc.", single initials, embedded periods)
+2. sentence pairing via Jaccard similarity
+3. above `SIMILARITY_THRESHOLD = 0.4`: word-level LCS diff; below: atomic sentence replace
+4. word tokenization that preserves whitespace tokens for accurate cursor positioning
+5. position mapping into the source draft, then sort by direction:
+   - **Draft 1 → 2** (right-to-left): descending position; edits applied without offset accumulation because each edit's position is unaffected by edits already made further right
+   - **Draft 2 → 3** (left-to-right): ascending position; an offset accumulator updates each subsequent edit's target position by the net length change of preceding edits
+
+Edit execution: the manager pauses ~2s between phases, navigates with arrow keys (~0.08s per press, 0.3s settle), and applies each edit via either backspace (backward) or shift-select-then-backspace (forward). Before any destructive operation, it verifies `expectedText` / `expectedOldText` against a tracked document snapshot and aborts to `idle` on mismatch.
+
+Tests in `Watch Me TypeTests/` cover `EditOperationConverter` (tokenization, similarity, LCS, both sort directions) and the three-draft pipeline integration. UI and CGEvent behaviour are not currently unit-tested.
 
 ## Installation
 
@@ -77,19 +105,20 @@ The solution is not better detection; it's building actual relationships with st
 
 - While the app is typing, the device is effectively unavailable; switching apps auto-pauses until you return. I would recommend running this in a VM.
 - Provide Draft 2 to simulate a realistic revision of Draft 1; leave it blank for a single-draft run.
+- Toggle "I have a draft 3." to chain a second revision pass that walks Draft 2 left-to-right into Draft 3 — useful when a single revision cycle isn't enough to look authentic.
 - Use custom durations if you need a session to last a minimum amount of time; otherwise the app estimates based on WPM and text length.
-- In Draft 2 editing mode, focus/window changes abort editing to avoid writing in the wrong place; if needed, use Cmd+Z in your target app.
+- During any editing phase, focus/window changes abort editing to avoid writing in the wrong place; if needed, use Cmd+Z in your target app.
 - ESC pauses during typing, but stops editing sessions.
 
 ### Text Cleanup Behavior
 
-- Click **Process** to apply cleanup to Draft 1 and (if present) Draft 2.
-- Toggle-controlled cleanup includes removing blank lines, emojis, horizontal rules, bullet prefixes, and replacing em dashes with commas.
+- Click **Process** to apply cleanup to Draft 1 and (if present) Draft 2 and Draft 3.
+- Toggle-controlled cleanup includes removing blank lines, emojis, horizontal rules, bullet and numbered-list prefixes, and replacing em dashes with commas.
 - Space normalization (collapsing repeated spaces and removing spaces before punctuation) is always applied during processing.
 
 ### Effective Use
 
-This app works best as part of a longer writing process. Generate drafts _elsewhere_, then use Watch Me Type to reproduce how writing normally appears over time (Draft 1) and, if needed, to stage a believable edit into Draft 2.
+This app works best as part of a longer writing process. Generate drafts _elsewhere_, then use Watch Me Type to reproduce how writing normally appears over time (Draft 1) and, if needed, to stage a believable revision into Draft 2 and an optional polish pass into Draft 3.
 
 ## Build from Source
 

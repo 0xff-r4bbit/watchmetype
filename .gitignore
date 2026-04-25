@@ -1,0 +1,33 @@
+# Markdown files
+*.md
+
+# AI-generated / Claude Code context
+.claude/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+Thumbs.db
+ehthumbs.db
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# SwiftPM / package managers
+.build/
+.swiftpm/xcode/xcuserdata
+
+# Editor cruft
+*~
+*.swp
+*.swo
+*.orig
