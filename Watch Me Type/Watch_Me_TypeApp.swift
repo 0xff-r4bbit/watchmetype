@@ -20,6 +20,7 @@ struct Watch_Me_TypeApp: App {
         WindowGroup {
             ContentView()
         }
+        .defaultSize(width: 1000, height: 840)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {

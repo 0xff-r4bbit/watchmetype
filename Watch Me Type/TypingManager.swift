@@ -970,124 +970,6 @@ final class TypingManager: NSObject, ObservableObject {
         keyUp.post(tap: .cghidEventTap)
     }
 
-    /// Selects characters using Shift+Right Arrow, then deletes with Backspace.
-    /// This approach works reliably in web editors like Google Docs where forward delete may not work.
-    private func selectAndDelete(count: Int, completion: @escaping () -> Void) {
-        guard count > 0 else {
-            completion()
-            return
-        }
-
-        let selectionDelay = 0.08 * editingDelayMultiplier
-        let postSelectionDelay = 0.15 * editingDelayMultiplier
-
-        // Step 1: Press and HOLD Shift key
-        sendShiftDown()
-
-        // Step 2: Send Right Arrow keys with Shift held to extend selection
-        sendArrowKeysWithShiftHeld(direction: .right, count: count, delay: selectionDelay) { [weak self] in
-            guard let self = self, self.state == .editing else { return }
-
-            // Step 3: Release Shift key
-            self.sendShiftUp()
-
-            // Step 4: Pause briefly to let the selection register
-            DispatchQueue.main.asyncAfter(deadline: .now() + postSelectionDelay) { [weak self] in
-                guard let self = self, self.state == .editing else { return }
-
-                // Step 5: Delete the selection with Backspace
-                self.sendBackspace()
-
-                // Step 6: Brief pause after deletion, then complete
-                let postDeleteDelay = 0.15 * self.editingDelayMultiplier
-                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) {
-                    completion()
-                }
-            }
-        }
-    }
-
-    /// Sends Shift key down event (press and hold)
-    private func sendShiftDown() {
-        let source = CGEventSource(stateID: .hidSystemState)
-        let shiftKeyCode: CGKeyCode = 0x38 // Left Shift
-
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: shiftKeyCode, keyDown: true) else {
-            return
-        }
-        keyDown.flags = .maskShift
-        keyDown.post(tap: .cghidEventTap)
-    }
-
-    /// Sends Shift key up event (release)
-    private func sendShiftUp() {
-        let source = CGEventSource(stateID: .hidSystemState)
-        let shiftKeyCode: CGKeyCode = 0x38 // Left Shift
-
-        guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: shiftKeyCode, keyDown: false) else {
-            return
-        }
-        keyUp.flags = []
-        keyUp.post(tap: .cghidEventTap)
-    }
-
-    /// Sends arrow keys with Shift held (for extending selection)
-    private func sendArrowKeysWithShiftHeld(direction: ArrowDirection, count: Int, delay: TimeInterval, completion: @escaping () -> Void) {
-        guard count > 0 else {
-            completion()
-            return
-        }
-
-        var remaining = count
-
-        func sendNext() {
-            guard remaining > 0 else {
-                completion()
-                return
-            }
-
-            sendArrowKeyWithShiftHeld(direction)
-            remaining -= 1
-
-            if remaining > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    sendNext()
-                }
-            } else {
-                // Add delay after last key
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    completion()
-                }
-            }
-        }
-
-        sendNext()
-    }
-
-    /// Sends a single arrow key with Shift modifier flag set (Shift already held down)
-    private func sendArrowKeyWithShiftHeld(_ direction: ArrowDirection) {
-        let source = CGEventSource(stateID: .hidSystemState)
-
-        let keyCode: CGKeyCode = switch direction {
-            case .left: 0x7B
-            case .right: 0x7C
-            case .up: 0x7E
-            case .down: 0x7D
-        }
-
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
-            return
-        }
-
-        // Keep Shift flag on both keyDown and keyUp to indicate Shift is still held
-        keyDown.flags = .maskShift
-        keyUp.flags = .maskShift
-
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
-    }
-
     private func sendReturnKey() {
         let source = CGEventSource(stateID: .hidSystemState)
         let returnKeyCode: CGKeyCode = 0x24  // Return key
@@ -1472,28 +1354,23 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     /// Navigates to the edit position and executes it.
-    /// Supports both right-to-left (backspace) and left-to-right (select-forward + delete) directions.
-    /// For right-to-left: navigate to END of text to delete, then backspace.
-    /// For left-to-right: navigate to START of text, then select-forward + delete.
+    /// For both directions: navigate to the END of the text to delete/replace, then
+    /// backspace. This keeps execution identical across directions; the direction
+    /// only changes edit ORDER and the `editPositionOffset` accounting.
     private func navigateAndExecuteEdit(_ edit: EditWithPosition) {
         let adjustedPosition = editDirection == .leftToRight
             ? edit.position + editPositionOffset
             : edit.position
 
         let navigationTarget: Int
-        switch editDirection {
-        case .rightToLeft:
-            switch edit.operation {
-            case .delete(let count, _):
-                navigationTarget = adjustedPosition + count
-            case .replace(let oldCount, _, _):
-                navigationTarget = adjustedPosition + oldCount
-            case .insert:
-                navigationTarget = adjustedPosition
-            default:
-                navigationTarget = adjustedPosition
-            }
-        case .leftToRight:
+        switch edit.operation {
+        case .delete(let count, _):
+            navigationTarget = adjustedPosition + count
+        case .replace(let oldCount, _, _):
+            navigationTarget = adjustedPosition + oldCount
+        case .insert:
+            navigationTarget = adjustedPosition
+        default:
             navigationTarget = adjustedPosition
         }
 
@@ -1548,8 +1425,8 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     /// Executes a single edit operation (delete, insert, or replace) at the current cursor position.
-    /// Supports both right-to-left (backspace) and left-to-right (select-forward + delete) directions.
-    /// Updates actualCursorPosition and editPositionOffset based on the operation performed.
+    /// Both directions use the backspace-from-end primitive; `editDirection` only changes
+    /// the `adjustedPosition` calculation and the `editPositionOffset` accounting.
     private func executeEditAtCurrentPosition(_ edit: EditWithPosition) {
         let adjustedPosition = editDirection == .leftToRight
             ? edit.position + editPositionOffset
@@ -1562,36 +1439,23 @@ final class TypingManager: NSObject, ObservableObject {
                 return
             }
 
-            switch editDirection {
-            case .rightToLeft:
-                appLog("Deleting \(count) characters with backspace (from end)", level: .debug)
-                let backspaceDelay = 0.1 * editingDelayMultiplier
-                sendKeysWithDelay(count: count, delay: backspaceDelay) {
-                    self.sendBackspace()
-                } completion: { [weak self] in
-                    guard let self = self, self.state == .editing else { return }
-                    self.actualCursorPosition = adjustedPosition
-                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
-                    appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
-                    let postDeleteDelay = 0.3 * self.editingDelayMultiplier
-                    DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
-                        guard let self = self, self.state == .editing else { return }
-                        self.completeCurrentEdit()
-                    }
-                }
-            case .leftToRight:
-                appLog("Deleting \(count) characters with select-forward + delete", level: .debug)
-                selectAndDelete(count: count) { [weak self] in
-                    guard let self = self, self.state == .editing else { return }
-                    self.actualCursorPosition = adjustedPosition
+            appLog("Deleting \(count) characters with backspace (from end)", level: .debug)
+            let backspaceDelay = 0.1 * editingDelayMultiplier
+            sendKeysWithDelay(count: count, delay: backspaceDelay) {
+                self.sendBackspace()
+            } completion: { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                self.actualCursorPosition = adjustedPosition
+                if self.editDirection == .leftToRight {
                     self.editPositionOffset -= count
-                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
-                    appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition), offset now \(self.editPositionOffset)", level: .debug)
-                    let postDeleteDelay = 0.3 * self.editingDelayMultiplier
-                    DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
-                        guard let self = self, self.state == .editing else { return }
-                        self.completeCurrentEdit()
-                    }
+                }
+                self.applyEditToTrackedDocument(edit, at: adjustedPosition)
+                let offsetInfo = self.editDirection == .leftToRight ? ", offset now \(self.editPositionOffset)" : ""
+                appLog("Deleted \(count) chars, cursor now at \(self.actualCursorPosition)\(offsetInfo)", level: .debug)
+                let postDeleteDelay = 0.3 * self.editingDelayMultiplier
+                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.completeCurrentEdit()
                 }
             }
 
@@ -1621,31 +1485,19 @@ final class TypingManager: NSObject, ObservableObject {
             }
             appLog("Replacing \(oldCount) chars with '\(newText.prefix(30))\(newText.count > 30 ? "..." : "")'", level: .debug)
 
-            switch editDirection {
-            case .rightToLeft:
-                executeReplace(oldCount: oldCount, newText: newText) { [weak self] in
-                    guard let self = self, self.state == .editing else { return }
-                    self.actualCursorPosition = adjustedPosition + newText.count
-                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
-                    appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)", level: .debug)
-                    let postReplaceDelay = 0.3 * self.editingDelayMultiplier
-                    DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
-                        guard let self = self, self.state == .editing else { return }
-                        self.completeCurrentEdit()
-                    }
-                }
-            case .leftToRight:
-                executeReplaceForward(oldCount: oldCount, newText: newText) { [weak self] in
-                    guard let self = self, self.state == .editing else { return }
-                    self.actualCursorPosition = adjustedPosition + newText.count
+            executeReplace(oldCount: oldCount, newText: newText) { [weak self] in
+                guard let self = self, self.state == .editing else { return }
+                self.actualCursorPosition = adjustedPosition + newText.count
+                if self.editDirection == .leftToRight {
                     self.editPositionOffset += newText.count - oldCount
-                    self.applyEditToTrackedDocument(edit, at: adjustedPosition)
-                    appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition), offset now \(self.editPositionOffset)", level: .debug)
-                    let postReplaceDelay = 0.3 * self.editingDelayMultiplier
-                    DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
-                        guard let self = self, self.state == .editing else { return }
-                        self.completeCurrentEdit()
-                    }
+                }
+                self.applyEditToTrackedDocument(edit, at: adjustedPosition)
+                let offsetInfo = self.editDirection == .leftToRight ? ", offset now \(self.editPositionOffset)" : ""
+                appLog("Replaced \(oldCount) with \(newText.count) chars, cursor now at \(self.actualCursorPosition)\(offsetInfo)", level: .debug)
+                let postReplaceDelay = 0.3 * self.editingDelayMultiplier
+                DispatchQueue.main.asyncAfter(deadline: .now() + postReplaceDelay) { [weak self] in
+                    guard let self = self, self.state == .editing else { return }
+                    self.completeCurrentEdit()
                 }
             }
 
@@ -1688,41 +1540,6 @@ final class TypingManager: NSObject, ObservableObject {
             } completion: { [weak self] in
                 guard let self = self, self.state == .editing else { return }
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
-                    guard let self = self, self.state == .editing else { return }
-                    performInsert()
-                }
-            }
-        } else {
-            performInsert()
-        }
-    }
-
-    /// Executes a forward replace: select-forward to select old text, delete, then insert new text.
-    /// Used in left-to-right editing where cursor is at the START of text to replace.
-    private func executeReplaceForward(oldCount: Int, newText: String, completion: @escaping () -> Void) {
-        let postDeleteDelay = 0.2 * editingDelayMultiplier
-        let postInsertDelay = 0.3 * editingDelayMultiplier
-        let baseDelay = max(0.05, interCharacterDelay) * editingDelayMultiplier
-
-        let performInsert: () -> Void = { [weak self] in
-            guard let self = self else { return }
-            guard !newText.isEmpty else {
-                completion()
-                return
-            }
-            self.sendCharactersWithDelay(newText, delay: baseDelay) { [weak self] in
-                guard let self = self, self.state == .editing else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + postInsertDelay) { [weak self] in
-                    guard let self = self, self.state == .editing else { return }
-                    completion()
-                }
-            }
-        }
-
-        if oldCount > 0 {
-            selectAndDelete(count: oldCount) { [weak self] in
-                guard let self = self, self.state == .editing else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + postDeleteDelay) { [weak self] in
                     guard let self = self, self.state == .editing else { return }
                     performInsert()
@@ -1994,7 +1811,9 @@ final class TypingManager: NSObject, ObservableObject {
     }
 
     /// Starts left-to-right editing to transform draft2 into draft3.
-    /// Cursor position is carried over from the previous right-to-left editing phase.
+    /// Navigates the cursor to the front of draft 2 first so forward edits start
+    /// from a known position, bounded by `actualCursorPosition` left-arrow presses
+    /// so we never walk into text that existed before the user's insertion point.
     private func startForwardEditing(draft2: String, draft3: String, customDuration: TimeInterval?) {
         if draft2 == draft3 {
             finishEditing()
@@ -2020,8 +1839,6 @@ final class TypingManager: NSObject, ObservableObject {
             self.progressFraction = 0.66
         }
 
-        // actualCursorPosition is carried over -- do NOT reset it
-
         if let targetDuration = customDuration, targetDuration > 0, !positionedEdits.isEmpty {
             let naturalEditingTime = estimateNaturalEditingTime()
             let extraBudget = max(0, targetDuration - naturalEditingTime)
@@ -2032,8 +1849,36 @@ final class TypingManager: NSObject, ObservableObject {
 
         startPeriodicFocusCheck()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.executeNextEdit()
+        navigateCursorToDraft2Start {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.executeNextEdit()
+            }
+        }
+    }
+
+    /// Moves the cursor from its current position to the start of draft 2 (position 0).
+    /// Uses relative left-arrow navigation bounded by `actualCursorPosition` so we
+    /// never cross into pre-existing document text before the user's insertion point.
+    private func navigateCursorToDraft2Start(completion: @escaping () -> Void) {
+        let distance = actualCursorPosition
+        guard distance > 0 else {
+            completion()
+            return
+        }
+
+        appLog("Navigating cursor to Draft 2 start: moving left \(distance) characters", level: .debug)
+
+        let navigationDelay = 0.08 * editingDelayMultiplier
+        sendKeysWithDelay(count: distance, delay: navigationDelay) {
+            self.sendArrowKey(.left)
+        } completion: { [weak self] in
+            guard let self = self, self.state == .editing else { return }
+            self.actualCursorPosition = 0
+            appLog("Cursor now at Draft 2 start (position 0)", level: .debug)
+            let postNavDelay = 0.3 * self.editingDelayMultiplier
+            DispatchQueue.main.asyncAfter(deadline: .now() + postNavDelay) {
+                completion()
+            }
         }
     }
 

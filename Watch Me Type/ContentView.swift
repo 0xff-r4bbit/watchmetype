@@ -10,16 +10,34 @@ private class FixedIntrinsicScrollView: NSScrollView {
     }
 }
 
+/// NSTextView subclass that reports first-responder transitions so SwiftUI can show the
+/// focus border the moment the cursor lands in the field, not just when typing starts.
+private class FocusReportingTextView: NSTextView {
+    var onFocusChange: ((Bool) -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if result { onFocusChange?(true) }
+        return result
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        if result { onFocusChange?(false) }
+        return result
+    }
+}
+
 struct NativeTextEditor: NSViewRepresentable {
     @Binding var text: String
     var accessibilityLabel: String = "Text editor"
     var isFocused: Binding<Bool>? = nil
+    var focusOnAppear: Bool = false
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = FixedIntrinsicScrollView()
-        let textView = NSTextView()
+        let textView = FocusReportingTextView()
 
-        // Configure text view
         textView.isRichText = false
         textView.allowsUndo = true
         textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
@@ -36,14 +54,24 @@ struct NativeTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.setAccessibilityLabel(accessibilityLabel)
 
-        // Configure scroll view - key settings for proper scroll indicator behavior
+        let coordinator = context.coordinator
+        textView.onFocusChange = { [weak coordinator] focused in
+            coordinator?.handleFocusChange(focused)
+        }
+
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true  // This is the key setting
+        scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
+
+        if focusOnAppear {
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(textView)
+            }
+        }
 
         return scrollView
     }
@@ -73,65 +101,127 @@ struct NativeTextEditor: NSViewRepresentable {
             text.wrappedValue = textView.string
         }
 
-        func textDidBeginEditing(_ notification: Notification) {
-            isFocused?.wrappedValue = true
-        }
-
-        func textDidEndEditing(_ notification: Notification) {
-            isFocused?.wrappedValue = false
+        func handleFocusChange(_ focused: Bool) {
+            DispatchQueue.main.async { [weak self] in
+                self?.isFocused?.wrappedValue = focused
+            }
         }
     }
+}
+
+/// HStack-style layout that always splits its bounds into equal-width columns,
+/// ignoring intrinsic content widths. Used so that adding a Draft 2/3 column with a
+/// fused editing card doesn't make Draft 1's editor narrower than its siblings.
+struct EqualWidthHStack: Layout {
+    var spacing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let count = CGFloat(subviews.count)
+        let totalSpacing = spacing * max(0, count - 1)
+
+        if let proposedWidth = proposal.width, proposedWidth.isFinite {
+            let itemWidth = max(0, (proposedWidth - totalSpacing) / count)
+            let childProposal = ProposedViewSize(width: itemWidth, height: proposal.height)
+            let maxHeight = subviews.map { $0.sizeThatFits(childProposal).height }.max() ?? 0
+            return CGSize(width: proposedWidth, height: maxHeight)
+        }
+
+        // Unbounded width: fall back to natural sizes.
+        let naturalSizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let maxItemWidth = naturalSizes.map(\.width).max() ?? 0
+        let totalWidth = maxItemWidth * count + totalSpacing
+        let maxHeight = naturalSizes.map(\.height).max() ?? 0
+        return CGSize(width: totalWidth, height: maxHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let count = CGFloat(subviews.count)
+        let totalSpacing = spacing * max(0, count - 1)
+        let itemWidth = max(0, (bounds.width - totalSpacing) / count)
+        let childProposal = ProposedViewSize(width: itemWidth, height: bounds.height)
+
+        var x = bounds.minX
+        for subview in subviews {
+            subview.place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: childProposal
+            )
+            x += itemWidth + spacing
+        }
+    }
+}
+
+enum DraftEditorCornerStyle {
+    /// Stand-alone editor with its own rounded corners and focus border (Draft 1).
+    case full
+    /// Editor sits inside a fused container that owns the corners and border.
+    case bare
 }
 
 private struct DraftEditor: View {
     let title: String
     @Binding var text: String
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     let editorAccessibilityLabel: String
-    @State private var isFocused: Bool = false
+    @Binding var isFocused: Bool
+    var showsTitle: Bool = true
+    var cornerStyle: DraftEditorCornerStyle = .full
+    var focusOnAppear: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            ZStack(alignment: .topLeading) {
-                NativeTextEditor(
-                    text: $text,
-                    accessibilityLabel: editorAccessibilityLabel,
-                    isFocused: $isFocused
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(8)
-
-                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(placeholder)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 9)
-                        .padding(.leading, 13)
-                        .allowsHitTesting(false)
-                }
+            if showsTitle {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(NSColor.textBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isFocused ? Color.accentColor : Color.secondary.opacity(0.3),
-                            lineWidth: isFocused ? 2 : 1)
-            )
-            .animation(.easeOut(duration: 0.15), value: isFocused)
 
-            let wordCount = text
-                .split(omittingEmptySubsequences: true, whereSeparator: { $0.isWhitespace || $0.isNewline })
-                .count
-            Text("\(wordCount) words")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            editorBody
+        }
+    }
+
+    @ViewBuilder
+    private var editorBody: some View {
+        let core = ZStack(alignment: .topLeading) {
+            NativeTextEditor(
+                text: $text,
+                accessibilityLabel: editorAccessibilityLabel,
+                isFocused: $isFocused,
+                focusOnAppear: focusOnAppear
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(8)
+
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(placeholder)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 9)
+                    .padding(.leading, 13)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        switch cornerStyle {
+        case .full:
+            core
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(NSColor.textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(isFocused ? Color.accentColor : Color.secondary.opacity(0.3),
+                                lineWidth: isFocused ? 2 : 1)
+                )
+                .animation(.easeOut(duration: 0.15), value: isFocused)
+
+        case .bare:
+            core
+                .background(Color(NSColor.textBackgroundColor))
         }
     }
 }
@@ -168,8 +258,27 @@ struct ContentView: View {
     @State private var storedNormalWindowFrame: CGRect? = nil
     @State private var pendingWindowAdjustment: DispatchWorkItem? = nil
     private let defaultWindowWidth: CGFloat = 1000
-    private let defaultWindowHeight: CGFloat = 840
+    private let defaultWindowHeight: CGFloat = 720
     private let windowAdjustmentDebounce: TimeInterval = 0.05
+
+    /// Per-draft target width for the editor + editing card. The window grows
+    /// to satisfy this minimum once Drafts 2 and 3 become visible.
+    private let draftColumnFloor: CGFloat = 250
+    private let sidebarWidth: CGFloat = 320
+    private let mainOuterPadding: CGFloat = 20
+    private let mainHStackSpacing: CGFloat = 16
+    private let draftsHStackSpacing: CGFloat = 16
+
+    private var visibleDraftCount: Int {
+        1 + (showDraft2 ? 1 : 0) + (showDraft2 && showDraft3 ? 1 : 0)
+    }
+
+    private var idealWindowWidth: CGFloat {
+        let n = CGFloat(visibleDraftCount)
+        let draftsAreaIdeal = n * draftColumnFloor + max(0, n - 1) * draftsHStackSpacing
+        let chrome = sidebarWidth + mainOuterPadding * 2 + mainHStackSpacing
+        return max(defaultWindowWidth, draftsAreaIdeal + chrome)
+    }
 
     // Optional total duration
     @State private var desiredDurationValue: String = ""
@@ -186,6 +295,11 @@ struct ContentView: View {
     @State private var customEditingDuration2: Bool = false
     @State private var editingDuration2Value: String = ""
     @State private var editingDuration2Unit: DurationUnit = .minutes
+
+    // Focus state per draft so editing cards can match the editor's focus border colour.
+    @State private var isDraft1EditorFocused: Bool = false
+    @State private var isDraft2EditorFocused: Bool = false
+    @State private var isDraft3EditorFocused: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -267,6 +381,12 @@ struct ContentView: View {
         }
         .onChange(of: targetWPM) { _, _ in
             flashEstimate()
+        }
+        .onChange(of: showDraft2) { _, _ in
+            adjustWindowForDraftCountChange()
+        }
+        .onChange(of: showDraft3) { _, _ in
+            adjustWindowForDraftCountChange()
         }
         .onChange(of: isOverlayVisible) { _, newValue in
             // When the overlay disappears entirely, ensure window level returns to normal.
@@ -409,8 +529,8 @@ struct ContentView: View {
         }
         .padding(20)
         .frame(
-            minWidth: isOverlayVisible ? defaultWindowWidth * 0.5 : defaultWindowWidth,
-            idealWidth: defaultWindowWidth
+            minWidth: isOverlayVisible ? defaultWindowWidth * 0.5 : idealWindowWidth,
+            idealWidth: idealWindowWidth
         )
         .allowsHitTesting(!isOverlayVisible)
     }
@@ -424,46 +544,112 @@ struct ContentView: View {
     @ViewBuilder
     private var draftEditorsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 16) {
+            EqualWidthHStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Draft 1")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
                     draftEditorView(
                         title: "Draft 1",
                         text: $inputText,
                         placeholder: "Paste your initial draft here.",
-                        editorAccessibilityLabel: "Draft 1 text editor"
+                        editorAccessibilityLabel: "Draft 1 text editor",
+                        isFocused: $isDraft1EditorFocused,
+                        showsTitle: false,
+                        cornerStyle: .full,
+                        focusOnAppear: true
                     )
 
-                    Toggle("I have a draft 2", isOn: $showDraft2)
-                        .font(.subheadline)
+                    HStack(alignment: .center, spacing: 8) {
+                        Toggle("I have a draft 2.", isOn: $showDraft2)
+                            .font(.caption)
+                        Spacer()
+                        Text("\(wordCount(of: inputText)) words")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
 
                 if showDraft2 {
                     VStack(alignment: .leading, spacing: 8) {
-                        draftEditorView(
-                            title: "Draft 2",
-                            text: $inputTextDraft2,
-                            placeholder: "Paste your final draft here.",
-                            editorAccessibilityLabel: "Draft 2 text editor"
+                        Text("Draft 2")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        fusedDraftPanel(
+                            focused: isDraft2EditorFocused,
+                            header: { editingCard },
+                            editor: {
+                                draftEditorView(
+                                    title: "Draft 2",
+                                    text: $inputTextDraft2,
+                                    placeholder: "Paste your final draft here.",
+                                    editorAccessibilityLabel: "Draft 2 text editor",
+                                    isFocused: $isDraft2EditorFocused,
+                                    showsTitle: false,
+                                    cornerStyle: .bare
+                                )
+                            }
                         )
 
-                        Toggle("I have a draft 3", isOn: $showDraft3)
-                            .font(.subheadline)
+                        HStack(alignment: .center, spacing: 8) {
+                            Toggle("I have a draft 3.", isOn: $showDraft3)
+                                .font(.caption)
+                            Spacer()
+                            Text("\(wordCount(of: inputTextDraft2)) words")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
 
                 if showDraft2 && showDraft3 {
-                    draftEditorView(
-                        title: "Draft 3",
-                        text: $inputTextDraft3,
-                        placeholder: "Paste your third draft here.",
-                        editorAccessibilityLabel: "Draft 3 text editor"
-                    )
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Draft 3")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        fusedDraftPanel(
+                            focused: isDraft3EditorFocused,
+                            header: { editing2Card },
+                            editor: {
+                                draftEditorView(
+                                    title: "Draft 3",
+                                    text: $inputTextDraft3,
+                                    placeholder: "Paste your third draft here.",
+                                    editorAccessibilityLabel: "Draft 3 text editor",
+                                    isFocused: $isDraft3EditorFocused,
+                                    showsTitle: false,
+                                    cornerStyle: .bare
+                                )
+                            }
+                        )
+
+                        HStack(alignment: .center, spacing: 8) {
+                            // Phantom toggle for height parity with Drafts 1 and 2
+                            Toggle("I have a draft 3.", isOn: .constant(false))
+                                .font(.caption)
+                                .hidden()
+                            Spacer()
+                            Text("\(wordCount(of: inputTextDraft3)) words")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         }
         .sheet(isPresented: $showHowItWorksSheet) {
             howItWorksSheet
         }
+    }
+
+    private func wordCount(of text: String) -> Int {
+        text.split(omittingEmptySubsequences: true, whereSeparator: { $0.isWhitespace || $0.isNewline }).count
     }
 
     @ViewBuilder
@@ -527,14 +713,22 @@ struct ContentView: View {
     private func draftEditorView(
         title: String,
         text: Binding<String>,
-        placeholder: String,
-        editorAccessibilityLabel: String = "Text editor"
+        placeholder: LocalizedStringKey,
+        editorAccessibilityLabel: String = "Text editor",
+        isFocused: Binding<Bool>,
+        showsTitle: Bool = true,
+        cornerStyle: DraftEditorCornerStyle = .full,
+        focusOnAppear: Bool = false
     ) -> some View {
         DraftEditor(
             title: title,
             text: text,
             placeholder: placeholder,
-            editorAccessibilityLabel: editorAccessibilityLabel
+            editorAccessibilityLabel: editorAccessibilityLabel,
+            isFocused: isFocused,
+            showsTitle: showsTitle,
+            cornerStyle: cornerStyle,
+            focusOnAppear: focusOnAppear
         )
     }
 
@@ -568,12 +762,6 @@ struct ContentView: View {
 
             cleanUpCard
             typingSpeedCard
-            if showDraft2 {
-                editingCard
-            }
-            if showDraft2 && showDraft3 {
-                editing2Card
-            }
 
             Spacer(minLength: 0)
 
@@ -604,6 +792,23 @@ struct ContentView: View {
         .frame(width: 320, alignment: .topLeading)
     }
 
+    private var allCleanUpRulesOn: Binding<Bool> {
+        Binding(
+            get: {
+                removeBlankLines && removeEmojis && removeHorizontalRules
+                    && removeBulletPoints && removeListNumbering && replaceEmDashesWithCommas
+            },
+            set: { newValue in
+                removeBlankLines = newValue
+                removeEmojis = newValue
+                removeHorizontalRules = newValue
+                removeBulletPoints = newValue
+                removeListNumbering = newValue
+                replaceEmDashesWithCommas = newValue
+            }
+        )
+    }
+
     @ViewBuilder
     private var cleanUpCard: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -612,6 +817,12 @@ struct ContentView: View {
                 .bold()
 
             VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: allCleanUpRulesOn) {
+                    Text("all of the following")
+                        .bold()
+                }
+                .help("Toggle every clean-up rule below at once")
+
                 Toggle("Remove blank lines", isOn: $removeBlankLines)
                     .help("Removes empty lines between paragraphs")
                 Toggle("Remove emojis", isOn: $removeEmojis)
@@ -738,113 +949,122 @@ struct ContentView: View {
 
     @ViewBuilder
     private var editingCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             Label("Editing", systemImage: "pencil.and.outline")
-                .font(.headline)
+                .font(.subheadline)
                 .bold()
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(hasSecondDraft
-                    ? "The app will type draft 1, then edit it to match draft 2."
-                    : "Paste text in Draft 2 to enable the editing phase.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            Toggle("Custom Duration", isOn: $customEditingDuration)
+                .font(.subheadline)
 
-                Toggle("Custom Editing Duration", isOn: $customEditingDuration)
-                    .font(.subheadline)
+            // Reserve picker width even when not shown so the column doesn't reflow on toggle.
+            ZStack(alignment: .topLeading) {
+                editingDurationPicker
+                    .opacity(customEditingDuration ? 1 : 0)
+                    .allowsHitTesting(customEditingDuration)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    if customEditingDuration {
-                        editingDurationPicker
-                    } else {
-                        estimatedEditingText
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.vertical, 4)
-                    }
+                if !customEditingDuration {
+                    estimatedEditingText
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.top, 8)
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
-        )
+        .background(Color.secondary.opacity(0.08))
         .opacity(hasSecondDraft ? 1.0 : 0.5)
         .disabled(!hasSecondDraft)
     }
 
     @ViewBuilder
     private var editing2Card: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             Label("Editing 2", systemImage: "pencil.and.outline")
-                .font(.headline)
+                .font(.subheadline)
                 .bold()
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(hasThirdDraftText
-                    ? "After editing into draft 2, the app will edit it to match draft 3."
-                    : "Paste text in Draft 3 to enable the second editing phase.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            Toggle("Custom Duration", isOn: $customEditingDuration2)
+                .font(.subheadline)
 
-                Toggle("Custom Editing Duration", isOn: $customEditingDuration2)
-                    .font(.subheadline)
-
-                if customEditingDuration2 {
-                    HStack(alignment: .center, spacing: 8) {
-                        Text("edit for at least")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .padding(.vertical, 4)
-
-                        TextField("e.g. 5", text: $editingDuration2Value)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 60)
-
-                        Picker("", selection: $editingDuration2Unit) {
-                            ForEach(DurationUnit.allCases) { unit in
-                                Text(unit.displayName).tag(unit)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: .infinity)
-                    }
-                }
+            ZStack(alignment: .topLeading) {
+                editing2DurationPicker
+                    .opacity(customEditingDuration2 ? 1 : 0)
+                    .allowsHitTesting(customEditingDuration2)
             }
-            .padding(.top, 8)
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
-        )
+        .background(Color.secondary.opacity(0.08))
         .opacity(hasThirdDraftText ? 1.0 : 0.5)
         .disabled(!hasThirdDraftText)
     }
 
     @ViewBuilder
+    private func fusedDraftPanel<Header: View, Editor: View>(
+        focused: Bool,
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder editor: () -> Editor
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header()
+            Rectangle()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(height: 1)
+            editor()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(focused ? Color.accentColor : Color.secondary.opacity(0.3),
+                        lineWidth: focused ? 2 : 1)
+        )
+        .animation(.easeOut(duration: 0.15), value: focused)
+    }
+
+    @ViewBuilder
     private var editingDurationPicker: some View {
-        HStack(alignment: .center, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("edit for at least")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-                .padding(.vertical, 4)
 
-            TextField("e.g. 5", text: $editingDurationValue)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 60)
+            HStack(spacing: 8) {
+                TextField("e.g. 5", text: $editingDurationValue)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
 
-            Picker("", selection: $editingDurationUnit) {
-                ForEach(DurationUnit.allCases) { unit in
-                    Text(unit.displayName).tag(unit)
+                Picker("", selection: $editingDurationUnit) {
+                    ForEach(DurationUnit.allCases) { unit in
+                        Text(unit.displayName).tag(unit)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: .infinity)
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var editing2DurationPicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("edit for at least")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 8) {
+                TextField("e.g. 5", text: $editingDuration2Value)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+
+                Picker("", selection: $editingDuration2Unit) {
+                    ForEach(DurationUnit.allCases) { unit in
+                        Text(unit.displayName).tag(unit)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: .infinity)
+            }
         }
     }
 
@@ -1120,7 +1340,7 @@ struct ContentView: View {
                 .accessibilityHidden(!showProgressSection)
                 .allowsHitTesting(showProgressSection)
 
-            Text("\(Int(typingManager.progressFraction * 100))% complete")
+            Text("\(typingManager.progressFraction.formatted(.percent.precision(.fractionLength(0)))) complete")
                 .font(.caption)
                 .foregroundColor(secondaryText)
                 .opacity(showProgressSection ? 1 : 0)
@@ -1511,6 +1731,35 @@ struct ContentView: View {
                 showAccessibilityPreflightAlert()
             }
         }
+    }
+
+    /// Resize the window to fit the current draft column count. Animates so the
+    /// transition feels deliberate when the user toggles "I have a draft 2/3".
+    /// Keeps the window where the user put it — only nudges leftward if the new
+    /// width would push the right edge off the screen.
+    private func adjustWindowForDraftCountChange() {
+        guard let window = NSApp.mainWindow ?? NSApp.windows.first else { return }
+        guard let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+        let target = idealWindowWidth
+
+        window.minSize = NSSize(width: target, height: defaultWindowHeight)
+
+        var newFrame = window.frame
+        guard abs(newFrame.size.width - target) > 0.5 else { return }
+        newFrame.size.width = target
+
+        // Only reposition if growing would push the right edge off-screen.
+        let rightEdgeMargin: CGFloat = 20
+        let maxRight = screenFrame.maxX - rightEdgeMargin
+        if newFrame.maxX > maxRight {
+            newFrame.origin.x = max(screenFrame.minX + rightEdgeMargin, maxRight - newFrame.size.width)
+        }
+
+        window.setFrame(newFrame, display: true, animate: true)
+
+        // Refresh the stored frame so overlay restore picks up the new width.
+        storedNormalWindowFrame = newFrame
     }
 
     private func setWindowToDefaultSize() {
