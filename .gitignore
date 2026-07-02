@@ -31,3 +31,9 @@ xcuserdata/
 *.swp
 *.swo
 *.orig
+
+# Secrets / signing (never commit the Sparkle private key)
+.sparkle/
+sparkle_ed25519_private_key
+*.pem
+*.p12
